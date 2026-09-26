@@ -239,7 +239,7 @@ export default function DiseaseDatabases() {
                 >
                   <Upload className="h-5 w-5 text-muted-foreground mb-1" />
                   <p className="text-sm font-medium">{selectedFile ? selectedFile.name : "Clique para selecionar arquivo"}</p>
-                  <p className="text-xs text-muted-foreground">.xlsx, .xls, .csv, .txt (tab-separado)</p>
+                  <p className="text-xs text-muted-foreground">.xlsx, .csv ou .txt (tab-separado). Arquivo .xls antigo: salve como .xlsx</p>
                   <input
                     id="create-db-file-upload"
                     type="file"

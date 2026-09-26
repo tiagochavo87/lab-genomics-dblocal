@@ -8,8 +8,8 @@ describe("parseUploadedFile", () => {
     const file = new File(["id;valor;ok;obito\n1;1.234,56;sim;0\n2;7,5;não;1\n"], "dados.csv");
     const rows = await parseUploadedFile(file);
     expect(rows).toEqual([
-      { id: 1, valor: 1234.56, ok: true, obito: 0 },
-      { id: 2, valor: 7.5, ok: false, obito: 1 },
+      { id: 1, valor: 1234.56, ok: "sim", obito: 0 },
+      { id: 2, valor: 7.5, ok: "não", obito: 1 },
     ]);
   });
 
@@ -26,6 +26,19 @@ describe("parseUploadedFile", () => {
     expect(rows).toEqual([
       { amostra: "A1", genotipo: "AG", idade: 45, coleta: "2020-05-12" },
       { amostra: "A2", genotipo: "GG", idade: 51, coleta: "2021-01-03" },
+    ]);
+  });
+
+  it("lê CSV salvo pelo Excel em Windows-1252 (ANSI) sem estragar acentos", async () => {
+    // "Fumante;Menopausa\nSim;Não\nNão;Sim" em Windows-1252: ã = 0xE3
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode("Fumante;Menopausa\nSim;N"), 0xe3, ...new TextEncoder().encode("o\nN"),
+      0xe3, ...new TextEncoder().encode("o;Sim\n"),
+    ]);
+    const rows = await parseUploadedFile(new File([bytes], "ansi.csv"));
+    expect(rows).toEqual([
+      { Fumante: "Sim", Menopausa: "Não" },
+      { Fumante: "Não", Menopausa: "Sim" },
     ]);
   });
 

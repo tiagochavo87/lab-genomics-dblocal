@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Play, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Dna, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
+import { readTextFile } from "@/lib/textEncoding";
 import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 import { runLDAnalysis, DEFAULT_LD_PARAMS, type LDResults, type LDParams } from "@/lib/ldAnalysis";
 import LDHeatmap from "@/components/LDHeatmap";
@@ -28,12 +29,12 @@ export default function LDAnalysisPage() {
     setFileName(file.name);
     setResults(null);
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setFileContent(ev.target?.result as string);
-      toast.success(`Arquivo "${file.name}" carregado`);
-    };
-    reader.readAsText(file);
+    readTextFile(file)
+      .then((text) => {
+        setFileContent(text);
+        toast.success(`Arquivo "${file.name}" carregado`);
+      })
+      .catch(() => toast.error("Não foi possível ler o arquivo"));
   }, []);
 
   const handleRun = useCallback(async () => {

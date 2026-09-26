@@ -1,4 +1,5 @@
 import { readXlsxGrids } from "./spreadsheet";
+import { readTextFile } from "./textEncoding";
 
 /**
  * Parse uploaded file (XLS, XLSX, CSV, TXT) into array of objects.
@@ -8,7 +9,7 @@ export async function parseUploadedFile(file: File): Promise<Record<string, unkn
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "txt" || ext === "tsv" || ext === "csv") {
-    const text = await file.text();
+    const text = await readTextFile(file);
     // CSV passa pela mesma detecção de cabeçalho usada nas planilhas.
     const lines = text
       .replace(/^\uFEFF/, "")
@@ -98,16 +99,14 @@ function normalizeHeaderLabel(value: string): string {
     .trim();
 }
 
-function parseCellValue(value: string): string | number | boolean {
+function parseCellValue(value: string): string | number {
   const trimmed = value.trim();
   if (!trimmed) return "";
 
   const lower = trimmed.toLowerCase();
-  // "1"/"0" e "s"/"n" NÃO viram booleano: colunas codificadas 0/1 (sexo,
-  // desfecho etc.) precisam continuar numéricas para as análises.
-  if (["true", "yes", "sim"].includes(lower)) return true;
-  if (["false", "no", "nao", "não"].includes(lower)) return false;
-
+  // Textos como "Sim"/"Não"/"true" são mantidos como estão (antes viravam
+  // verdadeiro/falso e apareciam como "true" na tabela). Só números são
+  // convertidos, inclusive no formato brasileiro (1.234,56).
   const numeric = parseNumericValue(trimmed);
   if (numeric !== null) return numeric;
 

@@ -39,7 +39,8 @@ Versão de endurecimento de segurança, LGPD e operação, resultado da auditori
 
 ### Interface
 - Leitura/escrita de planilhas com ExcelJS (o pacote `xlsx` 0.18.5 do npm tinha vulnerabilidades sem correção). `.xls` antigo deixa de ser aceito, com mensagem clara.
-- Corrigido: valores `0`/`1` e `s`/`n` eram convertidos em verdadeiro/falso na importação.
+- Corrigido: valores `0`/`1`, `s`/`n` e `Sim`/`Não` eram convertidos em verdadeiro/falso na importação (apareciam como "true"); agora ficam como estão.
+- CSV/TXT salvos pelo Excel em Windows-1252 (ANSI) são lidos com os acentos corretos (antes "Não" virava "N�o").
 - Fontes empacotadas localmente (sem Google Fonts).
 - Tela de Configurações com troca de senha e "sair de todos os computadores".
 - Log de atividades mostra origem (Servidor/Navegador) e ações novas.
