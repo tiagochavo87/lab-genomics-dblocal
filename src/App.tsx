@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { VersionProvider } from "@/contexts/VersionContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppHeader } from "@/components/AppHeader";
@@ -45,7 +44,7 @@ function ProtectedLayout() {
   }
 
   return (
-    <VersionProvider>
+    <>
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
           <AppSidebar />
@@ -69,7 +68,7 @@ function ProtectedLayout() {
           </div>
         </div>
       </SidebarProvider>
-    </VersionProvider>
+    </>
   );
 }
 

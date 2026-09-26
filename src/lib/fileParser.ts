@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { readXlsxGrids } from "./spreadsheet";
 
 /**
  * Parse uploaded file (XLS, XLSX, CSV, TXT) into array of objects.
@@ -7,33 +7,30 @@ import * as XLSX from "xlsx";
 export async function parseUploadedFile(file: File): Promise<Record<string, unknown>[]> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
-  if (ext === "txt") {
+  if (ext === "txt" || ext === "tsv" || ext === "csv") {
     const text = await file.text();
-    return parseDelimitedText(text);
+    // CSV passa pela mesma detecção de cabeçalho usada nas planilhas.
+    const lines = text
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .filter((line) => line.trim() && !line.trim().startsWith("#"));
+    if (lines.length < 2) return [];
+    const separator = detectSeparator(lines[0]);
+    return parseGrid(lines.map((line) => splitDelimitedLine(line, separator)));
   }
 
-  // XLS, XLSX and CSV: parse all sheets and pick the one with most valid rows
-  const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array", raw: false });
-
+  // XLSX: lê todas as planilhas e escolhe a que tem mais linhas válidas
+  const grids = await readXlsxGrids(file);
   let bestRows: Record<string, unknown>[] = [];
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    const rows = parseSheet(sheet);
+  for (const grid of grids) {
+    const rows = parseGrid(grid);
     if (rows.length > bestRows.length) bestRows = rows;
   }
 
   return bestRows;
 }
 
-function parseSheet(sheet: XLSX.WorkSheet): Record<string, unknown>[] {
-  const grid = XLSX.utils.sheet_to_json(sheet, {
-    header: 1,
-    raw: false,
-    defval: "",
-    blankrows: false,
-  }) as unknown[][];
-
+export function parseGrid(grid: unknown[][]): Record<string, unknown>[] {
   const rows = grid
     .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? "").trim()) : []))
     .filter((row) => row.some((cell) => cell !== ""));
@@ -84,7 +81,9 @@ function makeUniqueHeaders(rawHeaders: string[]): string[] {
   const seen = new Map<string, number>();
 
   return rawHeaders.map((header, index) => {
-    const base = normalizeHeaderLabel(header) || `coluna_${index + 1}`;
+    let base = normalizeHeaderLabel(header) || `coluna_${index + 1}`;
+    // Evita chaves especiais de objeto vindas de arquivos enviados.
+    if (["__proto__", "constructor", "prototype"].includes(base)) base = `${base}_col`;
     const count = seen.get(base) ?? 0;
     seen.set(base, count + 1);
     return count === 0 ? base : `${base}_${count + 1}`;
@@ -104,8 +103,10 @@ function parseCellValue(value: string): string | number | boolean {
   if (!trimmed) return "";
 
   const lower = trimmed.toLowerCase();
-  if (["true", "yes", "sim", "s", "1"].includes(lower)) return true;
-  if (["false", "no", "nao", "não", "n", "0"].includes(lower)) return false;
+  // "1"/"0" e "s"/"n" NÃO viram booleano: colunas codificadas 0/1 (sexo,
+  // desfecho etc.) precisam continuar numéricas para as análises.
+  if (["true", "yes", "sim"].includes(lower)) return true;
+  if (["false", "no", "nao", "não"].includes(lower)) return false;
 
   const numeric = parseNumericValue(trimmed);
   if (numeric !== null) return numeric;
@@ -141,29 +142,6 @@ function parseNumericValue(input: string): number | null {
   }
 
   return null;
-}
-
-function parseDelimitedText(text: string): Record<string, unknown>[] {
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"));
-
-  if (lines.length < 2) return [];
-
-  const separator = detectSeparator(lines[0]);
-  const headers = makeUniqueHeaders(splitDelimitedLine(lines[0], separator));
-
-  return lines.slice(1).map((line) => {
-    const values = splitDelimitedLine(line, separator);
-    const row: Record<string, unknown> = {};
-
-    headers.forEach((header, index) => {
-      row[header] = parseCellValue(values[index] ?? "");
-    });
-
-    return row;
-  });
 }
 
 function detectSeparator(headerLine: string): string {

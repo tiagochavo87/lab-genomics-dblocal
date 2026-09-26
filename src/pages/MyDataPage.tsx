@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +19,8 @@ export default function MyDataPage() {
 
     // Gather all user data
     const [activityRes, rolesRes] = await Promise.all([
-      supabase.from("activity_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
-      supabase.from("user_roles").select("*").eq("user_id", user.id),
+      api.from("activity_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
+      api.from("user_roles").select("*").eq("user_id", user.id),
     ]);
 
     const exportPayload = {

@@ -1,4 +1,4 @@
-import type { AuthChangeEvent, Session, User } from "@/integrations/local-auth/types";
+import type { AuthChangeEvent, Session, User } from "@/integrations/api/types";
 
 // "??" (não "||") é importante aqui: em produção atrás de um proxy reverso
 // (ver docker-compose.remote.yml) o build define VITE_API_URL="" de propósito,
@@ -46,13 +46,24 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<Api
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch {
+    return { data: null, error: { message: "Servidor indisponível. Verifique a conexão com o servidor do laboratório.", status: 0 } };
+  }
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
-  const payload = isJson ? await response.json() : null;
+  const payload = isJson ? await response.json().catch(() => null) : null;
+
+  if (response.status === 401 && token && !path.startsWith("/auth/login")) {
+    // Sessão expirada ou revogada (ex.: senha trocada em outro PC).
+    setStoredToken(null);
+    if (cachedSession) {
+      cachedSession = null;
+      notify("SIGNED_OUT", null);
+    }
+  }
 
   if (!response.ok) {
     return {
@@ -171,7 +182,7 @@ class QueryBuilder<T = any> implements PromiseLike<ApiResponse<T>> {
   }
 }
 
-export const supabase = {
+export const api = {
   from<T = any>(table: string) {
     return new QueryBuilder<T>(table);
   },
@@ -225,7 +236,7 @@ export const supabase = {
       return {
         data: {
           subscription: {
-            unsubscribe: () => listeners.delete(callback),
+            unsubscribe: () => { listeners.delete(callback); },
           },
         },
       };
@@ -238,7 +249,7 @@ export const supabase = {
       });
     },
 
-    async updateUser({ password }: { password: string }) {
+    async updateUser({ password, currentPassword }: { password: string; currentPassword?: string }) {
       const resetToken = getResetTokenFromUrl();
       if (resetToken) {
         const result = await apiFetch<{ ok: boolean }>("/auth/reset-password/confirm", {
@@ -249,14 +260,57 @@ export const supabase = {
         return result;
       }
 
-      const result = await apiFetch<{ ok: boolean }>("/auth/user", {
+      const result = await apiFetch<Session>("/auth/user", {
         method: "PATCH",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, current_password: currentPassword }),
       });
-      if (!result.error) notify("USER_UPDATED", cachedSession);
+      // A troca de senha revoga as sessões antigas e devolve um token novo.
+      if (result.data?.access_token) {
+        setStoredToken(result.data.access_token);
+        cachedSession = result.data;
+        notify("USER_UPDATED", result.data);
+      }
+      return result;
+    },
+
+    /** Encerra a sessão em todos os computadores. */
+    async signOutEverywhere() {
+      const result = await apiFetch<{ ok: boolean }>("/auth/logout-all", { method: "POST" });
+      setStoredToken(null);
+      cachedSession = null;
+      notify("SIGNED_OUT", null);
       return result;
     },
   },
+
+  // Operações feitas inteiramente no servidor (os dados não passam pelo navegador).
+  backups: {
+    database(databaseId: string, reason = "manual") {
+      return apiFetch<{ versions: number; created: unknown[] }>(`/api/backups/database/${encodeURIComponent(databaseId)}`, {
+        method: "POST", body: JSON.stringify({ reason }),
+      });
+    },
+    version(versionId: string, reason = "manual") {
+      return apiFetch<{ id: string }>(`/api/backups/version/${encodeURIComponent(versionId)}`, {
+        method: "POST", body: JSON.stringify({ reason }),
+      });
+    },
+    restore(backupId: string) {
+      return apiFetch<{ backup: { id: string; version_name: string } }>(`/api/backups/${encodeURIComponent(backupId)}/restore`, { method: "POST" });
+    },
+    sendToDestinations(versionId: string) {
+      return apiFetch<Array<{ label: string; success: boolean; error?: string }>>(`/api/backups/send/${encodeURIComponent(versionId)}`, { method: "POST" });
+    },
+  },
+
+  admin: {
+    revokeSessions(userId: string) {
+      return apiFetch<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}/revoke-sessions`, { method: "POST" });
+    },
+  },
 };
+
+/** Tamanho mínimo de senha (deve bater com PASSWORD_MIN_LENGTH do backend). */
+export const PASSWORD_MIN_LENGTH = 10;
 
 export type { Session, User, AuthChangeEvent };

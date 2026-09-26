@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Play, Download, FileSpreadsheet, AlertTriangle, CheckCircle2, Dna, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 import { runLDAnalysis, DEFAULT_LD_PARAMS, type LDResults, type LDParams } from "@/lib/ldAnalysis";
 import LDHeatmap from "@/components/LDHeatmap";
 import ManhattanPlot from "@/components/ManhattanPlot";
@@ -59,10 +59,10 @@ export default function LDAnalysisPage() {
 
   const exportResults = useCallback(() => {
     if (!results) return;
-    const wb = XLSX.utils.book_new();
+    const sheets: SheetSpec[] = [];
 
     // Summary
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([results.summary]), "Resumo");
+    sheets.push({ name: "Resumo", rows: [results.summary] });
 
     // QC
     const qcData = results.qc.map(q => ({
@@ -74,7 +74,7 @@ export default function LDAnalysisPage() {
       "Contagem Alelos": JSON.stringify(q.alleleCounts),
       "Freq. Alelos": JSON.stringify(q.alleleFreqs),
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qcData), "QC");
+    sheets.push({ name: "QC", rows: qcData });
 
     // Haplotypes
     const hapData = results.haplotypes.map(h => ({
@@ -82,7 +82,7 @@ export default function LDAnalysisPage() {
       Frequência: h.frequency.toFixed(6),
       "Obs. Direta": h.directlyObservable ? "Sim" : "Não",
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hapData), "Haplótipos");
+    sheets.push({ name: "Haplótipos", rows: hapData });
 
     // LD details
     const ldData = results.ldDetails.map(d => ({
@@ -91,19 +91,19 @@ export default function LDAnalysisPage() {
       pA: d.pA.toFixed(4), pB: d.pB.toFixed(4), pAB: d.pAB.toFixed(4),
       D: d.D.toFixed(6), "D'": d.dPrime.toFixed(4), "r²": d.r2.toFixed(4),
     }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ldData), "LD Detalhado");
+    sheets.push({ name: "LD Detalhado", rows: ldData });
 
     // r2 matrix
     const { loci, values: r2Vals } = results.r2Matrix;
     const r2Sheet = [["", ...loci], ...loci.map((l, i) => [l, ...r2Vals[i].map(v => Number.isNaN(v) ? "NA" : v.toFixed(4))])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(r2Sheet), "Matriz r²");
+    sheets.push({ name: "Matriz r²", aoa: r2Sheet });
 
     // D' matrix
     const dpVals = results.dPrimeMatrix.values;
     const dpSheet = [["", ...loci], ...loci.map((l, i) => [l, ...dpVals[i].map(v => Number.isNaN(v) ? "NA" : v.toFixed(4))])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dpSheet), "Matriz D'");
+    sheets.push({ name: "Matriz D'", aoa: dpSheet });
 
-    XLSX.writeFile(wb, `LD_Analysis_${fileName || "results"}.xlsx`);
+    void downloadXlsx(`LD_Analysis_${fileName || "results"}.xlsx`, sheets).catch(() => toast.error("Falha ao gerar o arquivo XLSX"));
     toast.success("Resultados exportados!");
   }, [results, fileName]);
 

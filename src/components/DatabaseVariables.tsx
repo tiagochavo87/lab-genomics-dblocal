@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { toast } from "sonner";
+import { useRole } from "@/hooks/useAdminCheck";
+import { isIdentifyingColumn } from "@/lib/dataMasking";
 
 interface Variable {
   id: string;
@@ -18,7 +20,14 @@ interface Variable {
   category: string;
   description: string;
   sort_order: number;
+  identifying?: boolean | null;
 }
+
+const LGPD_OPTIONS = [
+  { value: "auto", label: "Automático" },
+  { value: "yes", label: "Identificável" },
+  { value: "no", label: "Não identificável" },
+];
 
 const VARIABLE_TYPES = [
   { value: "text", label: "Texto" },
@@ -45,9 +54,19 @@ export default function DatabaseVariables({ databaseId }: { databaseId: string }
   const [category, setCategory] = useState("Geral");
   const [customCategory, setCustomCategory] = useState("");
   const [description, setDescription] = useState("");
+  const { isAdmin } = useRole();
+
+  // Define se a coluna é mascarada para quem não é admin (LGPD).
+  const setIdentifying = async (v: Variable, value: string) => {
+    const identifying = value === "auto" ? null : value === "yes";
+    const { error } = await api.from("database_variables").update({ identifying }).eq("id", v.id);
+    if (error) return toast.error(error.message);
+    setVariables((prev) => prev.map((x) => (x.id === v.id ? { ...x, identifying } : x)));
+    toast.success("Classificação LGPD atualizada");
+  };
 
   const fetchVariables = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from("database_variables")
       .select("*")
       .eq("database_id", databaseId)
@@ -61,7 +80,7 @@ export default function DatabaseVariables({ databaseId }: { databaseId: string }
   const handleAdd = async () => {
     if (!name.trim()) return;
     const finalCategory = category === "__custom" ? customCategory.trim() : category;
-    const { error } = await supabase.from("database_variables").insert({
+    const { error } = await api.from("database_variables").insert({
       database_id: databaseId,
       name: name.trim(),
       variable_type: varType,
@@ -80,7 +99,7 @@ export default function DatabaseVariables({ databaseId }: { databaseId: string }
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("database_variables").delete().eq("id", id);
+    const { error } = await api.from("database_variables").delete().eq("id", id);
     if (error) toast.error("Erro ao excluir");
     else { toast.success("Variável excluída"); fetchVariables(); }
   };
@@ -169,6 +188,7 @@ export default function DatabaseVariables({ databaseId }: { databaseId: string }
                       <TableHead className="text-xs">Nome</TableHead>
                       <TableHead className="text-xs">Tipo</TableHead>
                       <TableHead className="text-xs">Descrição</TableHead>
+                      <TableHead className="text-xs">LGPD</TableHead>
                       <TableHead className="text-xs w-[60px]"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -182,6 +202,25 @@ export default function DatabaseVariables({ databaseId }: { databaseId: string }
                           </span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{v.description || "—"}</TableCell>
+                        <TableCell className="text-xs">
+                          {isAdmin ? (
+                            <Select
+                              value={v.identifying == null ? "auto" : v.identifying ? "yes" : "no"}
+                              onValueChange={(val) => setIdentifying(v, val)}
+                            >
+                              <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {LGPD_OPTIONS.map((o) => (
+                                  <SelectItem key={o.value} value={o.value} className="text-xs">
+                                    {o.value === "auto" ? `Automático (${isIdentifyingColumn(v.name) ? "mascara" : "não mascara"})` : o.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            (v.identifying ?? isIdentifyingColumn(v.name)) ? <Badge variant="outline" className="text-[10px]">Mascarada</Badge> : "—"
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(v.id)}>
                             <Trash2 className="h-3.5 w-3.5 text-destructive" />

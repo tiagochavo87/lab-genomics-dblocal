@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api, PASSWORD_MIN_LENGTH } from "@/integrations/api/client";
 import { logActivity } from "@/lib/activityLog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { User, Save, Building2, GraduationCap, UserCheck } from "lucide-react";
+import { User, Save, Building2, GraduationCap, UserCheck, KeyRound, LogOut } from "lucide-react";
 
 const ROLE_OPTIONS = [
   "Iniciação Científica",
@@ -28,6 +28,34 @@ export default function SettingsPage() {
   const [program, setProgram] = useState("");
   const [advisor, setAdvisor] = useState("");
   const [saving, setSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      toast({ title: `A nova senha precisa ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres`, variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "As senhas não coincidem", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    const { error } = await api.auth.updateUser({ password: newPassword, currentPassword });
+    setChangingPassword(false);
+    if (error) {
+      toast({ title: "Não foi possível trocar a senha", description: error.message, variant: "destructive" });
+      return;
+    }
+    setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+    toast({ title: "Senha alterada", description: "As sessões abertas em outros computadores foram encerradas." });
+  };
+
+  const handleSignOutEverywhere = async () => {
+    await api.auth.signOutEverywhere();
+  };
 
   useEffect(() => {
     if (profile) {
@@ -44,7 +72,7 @@ export default function SettingsPage() {
     if (!user) return;
     setSaving(true);
 
-    const { error } = await supabase
+    const { error } = await api
       .from("profiles")
       .update({
         full_name: fullName.trim(),
@@ -139,6 +167,41 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-primary" />
+            Segurança da conta
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Senha atual</Label>
+              <Input id="current-password" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nova senha</Label>
+              <Input id="new-password" type="password" autoComplete="new-password" placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+              <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleChangePassword} disabled={changingPassword || !currentPassword || !newPassword} className="gap-2">
+              <KeyRound className="h-4 w-4" />
+              {changingPassword ? "Alterando..." : "Alterar senha"}
+            </Button>
+            <Button variant="outline" onClick={handleSignOutEverywhere} className="gap-2">
+              <LogOut className="h-4 w-4" />
+              Sair de todos os computadores
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">Sobre o Sistema</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
@@ -148,7 +211,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Versão do Sistema</span>
-            <Badge variant="secondary">1.0.0</Badge>
+            <Badge variant="secondary">2.0.0</Badge>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Laboratório</span>

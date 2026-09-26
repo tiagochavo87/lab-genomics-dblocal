@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
-import { maskDataset, getIdentifyingColumns } from "@/lib/dataMasking";
+import { getIdentifyingColumns } from "@/lib/dataMasking";
 import { logSensitiveAccess } from "@/lib/sensitiveAccessLog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Columns3, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Database, Layers, Search, X, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -57,7 +57,7 @@ export default function DatabasePage() {
 
   // Fetch databases
   useEffect(() => {
-    supabase
+    api
       .from("disease_databases")
       .select("id, name, disease")
       .order("name")
@@ -78,12 +78,12 @@ export default function DatabasePage() {
     }
 
     Promise.all([
-      supabase
+      api
         .from("database_versions")
         .select("id, name, version_number, row_count, data")
         .eq("database_id", selectedDbId)
         .order("created_at", { ascending: false }),
-      supabase
+      api
         .from("database_variables")
         .select("id, name, category, variable_type")
         .eq("database_id", selectedDbId)
@@ -112,11 +112,12 @@ export default function DatabasePage() {
   const activeVersion = versions.find((v) => v.id === selectedVersionId);
   const allColumns = variables.map((v) => v.name);
   const orderedVisible = allColumns.filter((c) => visibleColumns.has(c));
-  const identifyingCols = useMemo(() => getIdentifyingColumns(allColumns), [allColumns]);
+  const identifyingCols = useMemo(() => getIdentifyingColumns(allColumns, variables), [allColumns, variables]);
 
   const activeData = useMemo(() => {
     const raw = activeVersion?.data || [];
-    const masked = maskDataset(raw, isAdmin);
+    // Já vem mascarado do servidor para quem não tem permissão.
+    const masked = raw;
     if (!searchData.trim()) return masked;
     const q = searchData.toLowerCase();
     return masked.filter((row) =>
@@ -130,7 +131,8 @@ export default function DatabasePage() {
   const toggleColumn = (col: string) => {
     setVisibleColumns((prev) => {
       const next = new Set(prev);
-      next.has(col) ? next.delete(col) : next.add(col);
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
       return next;
     });
   };
@@ -171,7 +173,7 @@ export default function DatabasePage() {
     });
 
     if (format === "xlsx") {
-      const wb = XLSX.utils.book_new();
+      const sheets: SheetSpec[] = [];
       const infoData = [
         ["Banco de Dados", dbName],
         ["Versão", versionLabel],
@@ -180,11 +182,9 @@ export default function DatabasePage() {
         ["Total de Registros", String(activeData.length)],
         ["Variáveis Exportadas", String(orderedVisible.length)],
       ];
-      const wsInfo = XLSX.utils.aoa_to_sheet(infoData);
-      XLSX.utils.book_append_sheet(wb, wsInfo, "Informações");
-      const ws = XLSX.utils.json_to_sheet(exportRows);
-      XLSX.utils.book_append_sheet(wb, ws, "Dados");
-      XLSX.writeFile(wb, `${dbName}_${versionLabel}.xlsx`);
+      sheets.push({ name: "Informações", aoa: infoData });
+      sheets.push({ name: "Dados", rows: exportRows });
+      void downloadXlsx(`${dbName}_${versionLabel}.xlsx`, sheets).catch(() => toast.error("Falha ao gerar o arquivo XLSX"));
       toast.success("Arquivo XLS exportado!");
     } else {
       const meta = [

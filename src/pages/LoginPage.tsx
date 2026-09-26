@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dna, Shield } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api, PASSWORD_MIN_LENGTH } from "@/integrations/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,7 +55,7 @@ export default function LoginPage() {
     setError(""); setSuccess("");
     if (!email.trim()) { setError("Informe seu email."); return; }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await api.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     if (error) { setError(error.message); }
@@ -76,13 +76,13 @@ export default function LoginPage() {
       setError("Você precisa aceitar a Política de Privacidade e os Termos de Uso para se cadastrar.");
       return;
     }
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`);
       return;
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { error } = await api.auth.signUp({
       email, password,
       options: {
         data: {
@@ -233,7 +233,7 @@ export default function LoginPage() {
                   <Label className="text-sm font-medium">Senha *</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 h-11" required />
+                    <Input type="password" placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`} value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 h-11" required />
                   </div>
                 </div>
                 <div className="space-y-2">

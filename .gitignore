@@ -31,3 +31,8 @@ dist-ssr
 # Segredos gerados pelo instalador Windows
 windows/.pg_superuser_password.txt
 logs/
+backups/
+windows/dblapoge-certificado.cer
+test-results/
+playwright-report/
+repo_github/

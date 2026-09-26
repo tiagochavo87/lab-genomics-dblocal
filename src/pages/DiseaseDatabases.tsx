@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export default function DiseaseDatabases() {
   const [uploading, setUploading] = useState(false);
 
   const fetchDatabases = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from("disease_databases")
       .select("*")
       .order("created_at", { ascending: false });
@@ -67,7 +67,7 @@ export default function DiseaseDatabases() {
 
     try {
       // 1. Create the database
-      const { data: dbData, error: dbError } = await supabase.from("disease_databases").insert({
+      const { data: dbData, error: dbError } = await api.from("disease_databases").insert({
         name: name.trim(), disease: disease.trim(),
         description: description.trim(), created_by: user.id,
       }).select("id").single();
@@ -90,13 +90,13 @@ export default function DiseaseDatabases() {
           description: "",
           sort_order: i,
         }));
-        const { error: varError } = await supabase.from("database_variables").insert(variableInserts);
+        const { error: varError } = await api.from("database_variables").insert(variableInserts);
         if (varError) {
           console.error("Error inserting variables:", varError);
           toast.warning("Banco criado, mas erro ao criar variáveis: " + varError.message);
         }
 
-        const { error: verError } = await supabase.from("database_versions").insert({
+        const { error: verError } = await api.from("database_versions").insert({
           database_id: dbData.id,
           name: `v1.0 - Importação Inicial`,
           version_number: "1.0",
@@ -112,9 +112,9 @@ export default function DiseaseDatabases() {
           toast.success(`Banco criado com ${previewData.length} registros e ${previewColumns.length} variáveis!`);
           await logActivity("version_created", "version", undefined, { name: "v1.0 - Importação Inicial", records: previewData.length });
           // AUTO BACKUP: Create backup of the initial import
-          const { data: newVersion } = await supabase.from("database_versions").select("*").eq("database_id", dbData.id).order("created_at", { ascending: false }).limit(1).single();
+          const { data: newVersion } = await api.from("database_versions").select("*").eq("database_id", dbData.id).order("created_at", { ascending: false }).limit(1).single();
           if (newVersion) {
-            await createSingleVersionBackup({ ...newVersion, data: Array.isArray(newVersion.data) ? newVersion.data : [] }, "initial_import");
+            await createSingleVersionBackup(newVersion.id, "initial_import");
           }
         }
       } else if (selectedFile) {
@@ -151,7 +151,7 @@ export default function DiseaseDatabases() {
 
   const handleDelete = async (id: string) => {
     const db = databases.find(d => d.id === id);
-    const { error } = await supabase.from("disease_databases").delete().eq("id", id);
+    const { error } = await api.from("disease_databases").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir"); }
     else {
       toast.success("Banco excluído");

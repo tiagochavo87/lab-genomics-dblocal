@@ -1,55 +1,81 @@
-const PUBLIC_READ_TABLES = ["disease_databases", "database_versions", "database_variables", "version_backups"];
+// Tabelas de dados de pesquisa: leitura para usuários aprovados.
+export const DATA_TABLES = ["disease_databases", "database_versions", "database_variables", "version_backups"];
 
 // Campos que um usuário comum nunca pode alterar em seu próprio perfil.
-// Só admins podem promover, aprovar ou reatribuir um perfil a outro usuário.
 export const PROFILE_ADMIN_ONLY_FIELDS = ["approved", "user_id", "id"];
+
+const isAdmin = (user) => user?.app_role === "admin";
+const isApproved = (user) => user?.approved === true || isAdmin(user);
+const isEditor = (user) => isApproved(user) && (user.app_role === "admin" || user.app_role === "moderator");
 
 export function canReadTable(user, table, filters = []) {
   if (!user) return false;
-  if (PUBLIC_READ_TABLES.includes(table)) return user.approved === true || user.app_role === "admin";
-  if (table === "profiles") return user.app_role === "admin" || hasOwnFilter(filters, user.id, ["user_id", "id"]);
-  if (table === "user_roles") return user.app_role === "admin" || hasOwnFilter(filters, user.id, ["user_id"]);
-  if (table === "activity_log") return user.app_role === "admin" || hasOwnFilter(filters, user.id, ["user_id"]);
-  if (table === "backup_settings") return user.app_role === "admin";
+  if (DATA_TABLES.includes(table)) return isApproved(user);
+  if (table === "profiles") return isAdmin(user) || hasOwnFilter(filters, user.id, ["user_id", "id"]);
+  if (table === "user_roles") return isAdmin(user) || hasOwnFilter(filters, user.id, ["user_id"]);
+  if (table === "activity_log") return isAdmin(user) || hasOwnFilter(filters, user.id, ["user_id"]);
+  if (table === "backup_settings") return isAdmin(user);
   return false;
 }
 
-export function canWriteTable(user, table, filters = [], values = {}) {
+/**
+ * @param {"insert"|"update"|"delete"} op
+ */
+export function canWriteTable(user, table, filters = [], values = {}, op = "insert") {
   if (!user) return false;
-  if (PUBLIC_READ_TABLES.includes(table)) {
-    return (user.app_role === "admin" || user.app_role === "moderator") && user.approved === true;
+
+  if (table === "version_backups") {
+    // Cópias de segurança são criadas/restauradas pelas rotas próprias do
+    // servidor (/api/backups/...), que nunca passam os dados pelo navegador.
+    return isAdmin(user) && op === "delete";
   }
-  if (table === "backup_settings" || table === "user_roles") return user.app_role === "admin";
+
+  if (table === "database_versions") {
+    if (!isEditor(user)) return false;
+    // O conteúdo de uma versão existente só é alterado por admin: um
+    // moderador vê os dados mascarados e poderia gravar a máscara por cima
+    // do dado real.
+    if (op === "update" && values && Object.prototype.hasOwnProperty.call(values, "data")) return isAdmin(user);
+    return true;
+  }
+
+  if (table === "database_variables") {
+    if (!isEditor(user)) return false;
+    // A classificação LGPD de uma variável decide o que é mascarado: só quem
+    // já vê os dados sem máscara (admin) pode alterá-la.
+    if (values && Object.prototype.hasOwnProperty.call(values, "identifying") && !isAdmin(user)) return false;
+    return true;
+  }
+
+  if (DATA_TABLES.includes(table)) return isEditor(user);
+
+  if (table === "backup_settings" || table === "user_roles") return isAdmin(user);
+
   if (table === "profiles") {
-    if (user.app_role === "admin") return true;
-    // Usuário comum só pode escrever na PRÓPRIA linha (verificado pelos filtros
-    // que efetivamente formam o WHERE da query, nunca pelos `values` enviados
-    // pelo próprio cliente).
-    return hasOwnFilter(filters, user.id, ["user_id", "id"]);
+    if (isAdmin(user)) return true;
+    // Usuário comum: só atualiza a PRÓPRIA linha, decidido pelos filtros que
+    // formam o WHERE. Não pode criar nem apagar perfis.
+    return op === "update" && hasOwnFilter(filters, user.id, ["user_id", "id"]);
   }
+
   if (table === "activity_log") {
-    if (user.app_role === "admin") return true;
-    // Log de auditoria é append-only para não-admins: só INSERT (sem filtros)
-    // e sempre em nome do próprio usuário. PATCH/DELETE (que usam filtros)
-    // ficam bloqueados para não permitir adulterar registros existentes.
-    return (!filters || filters.length === 0) && values.user_id === user.id;
+    // Log de auditoria é append-only para todos (inclusive admin): só
+    // acrescenta registros, sempre em nome do próprio usuário.
+    return op === "insert" && values?.user_id === user.id;
   }
+
   return false;
 }
 
-// Remove campos que um usuário não-admin não pode setar diretamente
-// (ex.: auto-aprovação, troca de dono do perfil).
 export function restrictProfileFields(user, payload) {
-  if (user.app_role === "admin") return payload;
+  if (isAdmin(user)) return payload;
   const clean = { ...payload };
   for (const field of PROFILE_ADMIN_ONLY_FIELDS) delete clean[field];
   return clean;
 }
 
-// Só considera filtros que de fato viram cláusula do WHERE (op === "eq").
-// Antes, um filtro com op diferente passava nesta checagem mas era descartado
-// pelo buildWhere, liberando leitura/escrita/remoção de linhas de terceiros.
-function hasOwnFilter(filters, userId, fields) {
+// Só considera filtros que viram cláusula do WHERE (op === "eq").
+export function hasOwnFilter(filters, userId, fields) {
   if (!Array.isArray(filters)) return false;
   return filters.some((f) => f?.op === "eq" && fields.includes(f?.field) && String(f?.value) === String(userId));
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,7 +21,7 @@ export default function DescriptiveStatsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.from("disease_databases").select("id, name, disease").order("name")
+    api.from("disease_databases").select("id, name, disease").order("name")
       .then(({ data }) => { setDatabases(data || []); setLoading(false); });
   }, []);
 
@@ -31,9 +31,9 @@ export default function DescriptiveStatsPage() {
       return;
     }
     Promise.all([
-      supabase.from("database_versions").select("id, name, version_number, row_count, data")
+      api.from("database_versions").select("id, name, version_number, row_count, data")
         .eq("database_id", selectedDbId).order("created_at", { ascending: false }),
-      supabase.from("database_variables").select("id, name, category, variable_type")
+      api.from("database_variables").select("id, name, category, variable_type")
         .eq("database_id", selectedDbId).order("sort_order"),
     ]).then(([vRes, varRes]) => {
       const parsed = (vRes.data || []).map(v => ({ ...v, data: Array.isArray(v.data) ? v.data as Record<string, unknown>[] : [] }));
@@ -57,7 +57,8 @@ export default function DescriptiveStatsPage() {
   const toggleVar = (name: string) => {
     setSelectedVars(prev => {
       const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
       return next;
     });
   };

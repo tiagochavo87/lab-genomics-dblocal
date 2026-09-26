@@ -1,90 +1,58 @@
-# Instalação no laboratório (Windows)
+# Instalação no Windows 10/11 (PC servidor do laboratório)
 
-Este modo instala tudo (frontend + backend + PostgreSQL) em **um único PC**,
-que passa a funcionar como o "servidor" do laboratório. Os demais PCs **não
-instalam nada** — só acessam pelo navegador, no mesmo endereço que o script
-imprime ao final.
+Um PC com **Windows 10 (1809 ou mais novo) ou 11** fica como servidor; os demais computadores só acessam pelo navegador. Esse PC precisa ficar ligado quando as pessoas forem usar o sistema.
 
-Este instalador ainda **não foi testado numa máquina Windows real** (foi
-escrito e revisado com cuidado, mas construído fora do Windows). Rode a
-primeira instalação com atenção à saída do script e volte aqui se algo
-falhar — cada etapa imprime uma mensagem de erro específica.
+> Windows 7/XP não servem como servidor (Node.js e PostgreSQL atuais não rodam neles).
 
-## Pré-requisitos
+## Instalar
 
-- Windows 10/11 com `winget` disponível (já vem por padrão; se não tiver,
-  o script avisa e diz onde pegar).
-- PowerShell como **Administrador**.
-- Conexão com a internet nesse PC durante a instalação (baixa Node.js,
-  PostgreSQL e o NSSM via winget, e as dependências do projeto via npm).
-- Esse PC precisa ficar ligado (ou pelo menos a conta do Windows logada)
-  para os outros PCs conseguirem acessar — o serviço reinicia sozinho
-  junto com o Windows, mas não sobrevive ao PC desligado.
-
-## Passo a passo
-
-1. Baixe/clone o repositório para um lugar **definitivo** neste PC — por
-   exemplo `C:\DBLAPOGE` (não em Downloads ou numa pasta temporária: o
-   serviço do Windows fica registrado apontando para esse caminho).
-2. Abra o PowerShell **como Administrador**, entre na pasta do projeto e
-   rode:
+1. Coloque o projeto numa pasta **definitiva**, por exemplo `C:\DBLAPOGE` (não em Downloads).
+2. Abra o PowerShell **como Administrador** e rode:
    ```powershell
    cd C:\DBLAPOGE
-   .\windows\install-server.ps1
+   Set-ExecutionPolicy -Scope Process Bypass
+   .\windows\install-server.ps1 -Https -EncryptBackups -BackupDir "D:\DBLAPOGE-backups"
    ```
-3. Acompanhe a saída. Ao final, o script imprime:
-   - o endereço (`http://<ip-deste-pc>:8080`) para configurar nos outros
-     PCs do laboratório;
-   - o email e a senha do administrador inicial (gerada automaticamente —
-     troque assim que fizer o primeiro login).
+   Opções:
+   | Opção | Para quê |
+   |---|---|
+   | `-Https` | cria um certificado próprio e serve por HTTPS (recomendado: sem isso senhas e dados trafegam sem criptografia na rede) |
+   | `-EncryptBackups` | pergunta uma senha e cifra os backups. **Guarde essa senha fora do PC**: sem ela o backup não pode ser restaurado |
+   | `-BackupDir` | pasta do backup diário. Use outro disco, HD externo ou uma pasta sincronizada (Google Drive/OneDrive) |
+   | `-BackupTime "12:30"` | horário do backup (se o PC estiver desligado, roda assim que ligar) |
+   | `-Port 8080` | porta de acesso |
+   | `-AdminEmail`, `-AdminName` | administrador inicial (só na primeira instalação) |
+3. No final aparecem o endereço (`https://IP-DO-PC:8080`) e a senha inicial do admin. Troque a senha em **Configurações → Segurança da conta**.
 
-## Nos outros PCs do laboratório
+O script instala Node.js LTS, PostgreSQL 16 e NSSM via `winget`, cria o usuário do banco sem superusuário, gera os segredos, faz o build, registra o serviço **DBLAPOGE** (conta `NT SERVICE\DBLAPOGE`, sem privilégios de administrador), agenda o backup diário, libera a porta **só para rede privada/sub-rede local** e roda o primeiro backup.
 
-Não precisa instalar nada. Basta:
-- criar um favorito no navegador apontando para o endereço impresso pelo
-  script (`http://<ip-do-pc-servidor>:8080`), ou
-- criar um atalho na área de trabalho: clique direito → Novo → Atalho →
-  cole o endereço.
+Pode ser executado de novo a qualquer momento para atualizar: preserva `.env`, segredos e banco.
 
-## Depois de instalado
+## Nos outros computadores
 
-- **Logs**: `logs\service.log` e `logs\service-error.log`, dentro da pasta
-  do projeto.
-- **Reiniciar o serviço** (ex.: depois de editar `backend\local-api\.env`,
-  como para configurar SMTP de verdade): `nssm restart DBLAPOGE` num
-  PowerShell como Administrador.
-- **Ver status**: `nssm status DBLAPOGE`.
-- **Desinstalar** (remove o serviço e a regra de firewall, mas mantém o
-  banco de dados e os arquivos do projeto):
-  ```powershell
-  .\windows\uninstall-server.ps1
-  ```
+- Acesse o endereço impresso pelo instalador (crie um favorito ou atalho).
+- **Com `-Https`**, instale o certificado uma vez em cada PC para o navegador não reclamar: copie `windows\dblapoge-certificado.cer` do servidor e, como Administrador, rode `.\confiar-certificado.ps1 -Arquivo .\dblapoge-certificado.cer` (confira a impressão digital com a mostrada pelo instalador). Alternativa manual: duplo clique no `.cer` → Instalar certificado → Máquina local → "Autoridades de Certificação Raiz Confiáveis".
+- Se a rede do laboratório estiver marcada como **Pública** no servidor, os outros PCs não conseguem acessar: mude para **Privada** (Configurações → Rede e Internet → propriedades da rede).
 
-## Sobre segurança nesse modo
+## Operação
 
-Esse modo serve a aplicação em **HTTP simples, sem HTTPS**, pensado para
-ficar só dentro da rede local do laboratório — as senhas e tokens trafegam
-sem criptografia entre os PCs e o servidor. Isso é uma troca aceitável numa
-rede interna confiável (cabo/Wi-Fi só do laboratório), mas:
+| Tarefa | Como |
+|---|---|
+| Reiniciar | `nssm restart DBLAPOGE` (PowerShell Administrador) |
+| Status | `nssm status DBLAPOGE` |
+| Logs | pasta `logs\` (`service.log`, `service-error.log`, `backup.log`) |
+| Backup manual | `.\windows\backup-db.ps1` |
+| Restaurar | `.\windows\restore-db.ps1 -File "D:\DBLAPOGE-backups\dblapoge_AAAA-MM-DD_HHMMSS.dump.enc"` |
+| Testar a instalação | `node scripts\testar-servidor.mjs https://IP:8080 admin@... "senha"` |
+| E-mail de recuperação de senha | preencha `SMTP_*` em `backend\local-api\.env` e reinicie |
+| Desinstalar | `.\windows\uninstall-server.ps1` (mantém banco, backups e pasta) |
 
-- **Nunca** exponha essa porta diretamente para a internet (redirecionamento
-  de porta no roteador, etc.) sem adicionar HTTPS antes — para acesso
-  remoto de verdade (fora do laboratório), use o caminho com Docker +
-  Caddy descrito em `README_SUBSTITUICAO_LOCAL.md`, que já cuida disso.
-- Se a rede Wi-Fi do laboratório for compartilhada com outras pessoas/
-  visitantes, considere separar numa rede/VLAN própria, já que qualquer
-  um nessa rede consegue ver o tráfego em texto claro.
+Onde ficam os segredos: `backend\local-api\.env` (JWT, senha do banco da aplicação) e `C:\ProgramData\DBLAPOGE\` (senha do superusuário do Postgres, certificado, senha dos backups). Todos com acesso restrito a Administradores.
 
-## O que o script faz, em ordem
+## Backup fora do PC
 
-1. Instala Node.js LTS (se não houver) via winget.
-2. Instala PostgreSQL 16 (se não houver) via winget, com senha de
-   superusuário gerada aleatoriamente, e cria o banco `dblapoge`.
-3. Gera `backend\local-api\.env` com `JWT_SECRET` aleatório, a senha do
-   Postgres gerada, e uma senha de administrador aleatória (só na primeira
-   instalação — se o `.env` já existir, ele é preservado).
-4. Instala as dependências e builda o frontend (`npm run build`, com
-   `VITE_API_URL` vazio — o próprio backend passa a servir o frontend).
-5. Registra o backend como Serviço do Windows via NSSM (início automático).
-6. Libera a porta escolhida (padrão 8080) no Firewall do Windows.
-7. Confere que `/health` responde antes de dar por concluído.
+O backup diário protege contra erro humano e corrupção, mas **não** contra perda do PC (disco, roubo, raio). Aponte `-BackupDir` para um HD externo ou uma pasta sincronizada com a nuvem, ou copie a pasta periodicamente. Os arquivos `.enc` só abrem com a senha do backup, então podem ir para a nuvem com segurança.
+
+## Acesso de fora do laboratório
+
+Este modo é para a rede interna. **Não** faça redirecionamento de porta no roteador. Para acesso pela internet use o modo Docker com domínio e HTTPS automático (README principal).

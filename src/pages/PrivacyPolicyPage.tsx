@@ -58,10 +58,11 @@ export default function PrivacyPolicyPage() {
         <CardContent className="text-sm space-y-2 text-muted-foreground">
           <p>Para proteger a identidade dos participantes de pesquisa:</p>
           <ul className="list-disc ml-6 space-y-1">
-            <li>Colunas identificadoras (nome, CPF, endereço, telefone, etc.) são <strong>automaticamente mascaradas</strong> para usuários não-administradores.</li>
-            <li>Apenas administradores com autorização explícita têm acesso aos dados identificáveis completos.</li>
-            <li>Todo acesso a dados sensíveis é <strong>registrado em log de auditoria</strong> com data, hora e identificação do usuário.</li>
-            <li>As exportações de dados por usuários não-administradores contêm dados mascarados.</li>
+            <li>Colunas identificadoras (nome, CPF, endereço, telefone, data de nascimento etc.) são <strong>mascaradas no servidor</strong> antes de serem enviadas a usuários que não são administradores: o valor original não chega ao computador desses usuários.</li>
+            <li>O administrador pode revisar a classificação de cada variável (identificável ou não) na tela de variáveis do banco.</li>
+            <li>Apenas administradores têm acesso aos dados identificáveis completos.</li>
+            <li>Visualizações e exportações de dados sensíveis são <strong>registradas em log de auditoria</strong> pelo próprio servidor, com data, hora, usuário e endereço de rede.</li>
+            <li>Exportações feitas por usuários não-administradores contêm os dados já mascarados.</li>
           </ul>
         </CardContent>
       </Card>
@@ -94,13 +95,13 @@ export default function PrivacyPolicyPage() {
         </CardHeader>
         <CardContent className="text-sm space-y-2 text-muted-foreground">
           <ul className="list-disc ml-6 space-y-1">
-            <li>Comunicação criptografada via HTTPS/TLS.</li>
-            <li>Row-Level Security (RLS) em todas as tabelas do banco de dados.</li>
-            <li>Controle de acesso baseado em papéis (RBAC): admin, moderador, usuário.</li>
+            <li>Comunicação criptografada via HTTPS/TLS quando o sistema é publicado com certificado (instalação Docker com Caddy ou instalação Windows com a opção HTTPS). Em instalações restritas à rede interna sem HTTPS, o tráfego não é criptografado.</li>
+            <li>Controle de acesso por papéis (administrador, moderador, usuário), verificado pelo servidor em todas as requisições.</li>
             <li>Aprovação obrigatória de novos cadastros por administrador.</li>
-            <li>Autenticação por e-mail e senha com verificação.</li>
-            <li>Backups automáticos com controle de versionamento.</li>
-            <li>Log de atividades para auditoria e rastreabilidade.</li>
+            <li>Senhas armazenadas com hash bcrypt; política de senha mínima; bloqueio temporário após tentativas repetidas de login.</li>
+            <li>Sessões com expiração; troca de senha encerra as sessões abertas em outros computadores.</li>
+            <li>Backup diário automático do banco de dados em arquivo, com retenção configurável e criptografia opcional, além de cópias internas de cada versão.</li>
+            <li>Registro de atividades para auditoria, com distinção entre eventos registrados pelo servidor e pela interface.</li>
           </ul>
         </CardContent>
       </Card>
@@ -128,7 +129,7 @@ export default function PrivacyPolicyPage() {
           <p><strong>Controlador:</strong> LAPOGE — Laboratório de Polimorfismos Genéticos</p>
           <p><strong>Responsável:</strong> Tiago Fernando Chaves</p>
           <p><strong>Contato:</strong> chaves.smo@gmail.com</p>
-          <p className="text-xs mt-4">Última atualização: Março de 2026</p>
+          <p className="text-xs mt-4">Última atualização: Setembro de 2026 (versão 2.0 do sistema)</p>
         </CardContent>
       </Card>
     </div>

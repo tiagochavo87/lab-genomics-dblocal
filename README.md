@@ -1,170 +1,144 @@
-# 🧬 Lab Atlas — LAPOGE
+# DBLAPOGE
 
-**Lab Atlas** é uma plataforma web desenvolvida para o **Laboratório de Polimorfismos Genéticos (LAPOGE)**, voltada ao gerenciamento de bancos de dados genômicos de doenças, com versionamento, backup automático, análises estatísticas e controle de acesso por papéis.
+Sistema web do **LAPOGE (Laboratório de Polimorfismos Genéticos, UFSC)** para gerenciar bancos de dados clínico-genômicos de pesquisa: bancos por doença, versões dos dados, variáveis, estatística descritiva, análise de LD, controle de acesso por papéis, auditoria e backup.
 
----
+Versão atual: **2.0.0** (ver [CHANGELOG.md](CHANGELOG.md)). Quem já usa a v1 deve ler [docs/MIGRACAO_v1_para_v2.md](docs/MIGRACAO_v1_para_v2.md).
 
-## ✨ Funcionalidades
+## Arquitetura
 
-### 📊 Dashboard
-- Visão geral com cards de resumo (bancos cadastrados, versões, variáveis)
-- Gráficos interativos de distribuição de dados
+| Parte | Tecnologia | Pasta |
+|---|---|---|
+| Interface | React 18 + Vite 7 + Tailwind (shadcn/ui) | `src/` |
+| API | Node.js 22+ (Express 4) | `backend/local-api/` |
+| Banco | PostgreSQL 16 | via Docker ou instalador Windows |
+| HTTPS / proxy | Caddy (modo Docker) ou certificado próprio (modo Windows) | `Caddyfile`, `windows/` |
+| Backup | `pg_dump` diário, com retenção e criptografia opcional | `backup/`, `windows/backup-db.ps1` |
 
-### 🗄️ Bancos de Dados de Doenças
-- Cadastro de bancos por condição/doença
-- Upload de arquivos (`.csv`, `.xlsx`, `.json`) com preview dos dados
-- Listagem, edição e exclusão de bancos
+Os dados de cada versão ficam no PostgreSQL. **Tudo que envolve permissão é decidido no servidor**: aprovação de cadastro, papéis, mascaramento LGPD, cópias e restauração de versões, auditoria. A interface só exibe o que a API devolve.
 
-### 🔄 Versionamento
-- Criação automática de versões sequenciais (V1, V2, V3...)
-- Botão **"Atualizar Banco"** para upload de novas versões
-- Histórico completo de versões por banco
+### Papéis
 
-### 💾 Backup Automático
-- Snapshot automático antes de cada nova versão
-- Tabela `version_backups` com dados completos de cada versão
-- Restauração de backups
+| Papel | Pode |
+|---|---|
+| Usuário (aprovado) | ver bancos, versões e estatísticas com **dados identificáveis mascarados**; exportar (mascarado) |
+| Moderador | o mesmo, e também criar bancos, variáveis e versões, fazer cópias e restaurar |
+| Administrador | tudo, incluindo ver dados sem máscara, aprovar cadastros, mudar papéis, classificar variáveis (LGPD), destinos de backup e log de auditoria |
 
-### 🗃️ Destinos de Backup (Admin)
-- Configuração de múltiplos destinos na aba **Backup** da administração:
-  - **Lovable Cloud Storage** — armazenamento integrado
-  - **Google Drive** — via Folder ID
-  - **Download Manual** — exportação em JSON/XLSX
-  - **Servidor Externo** — envio via webhook/API
-  - **Servidor Universitário** — credenciais institucionais (usuário, senha, diretório remoto)
-- Ativação/desativação individual de cada destino
+Cadastros novos ficam **pendentes** até um administrador aprovar.
 
-### 📈 Estatísticas Descritivas
-- Análise exploratória de variáveis dos bancos
-- Tabelas de frequência, média, mediana, desvio padrão
+## Como instalar
 
-### 🔗 Análise de Desequilíbrio de Ligação (LD)
-- Heatmap de LD entre marcadores
-- QQ Plot e Manhattan Plot
+Escolha **um** dos caminhos. Os três rodam a mesma aplicação.
 
-### 📋 Variáveis do Banco
-- Cadastro de variáveis por banco (nome, tipo, categoria, descrição)
-- Ordenação customizada
+### A. Servidor Linux ou nuvem com Docker (recomendado para acesso pela internet)
 
-### 👥 Administração
-- **Gerenciamento de Usuários**: aprovação/revogação de cadastros
-- **Controle de Permissões**: papéis `admin`, `moderator`, `user`
-- **Log de Atividades**: registro das últimas 50 ações no sistema
-- **Configurações de Backup**: definição de destinos de armazenamento
+Serve para uma VM na nuvem (inclusive gratuita), um servidor da instituição ou um PC com Linux.
 
-### 🔐 Autenticação e Segurança
-- Cadastro com aprovação obrigatória por administrador
-- Login por e-mail e senha
-- Recuperação de senha
-- Tela de "Aprovação Pendente" para novos cadastros
-- Row-Level Security (RLS) em todas as tabelas
-- Função `has_role()` com `SECURITY DEFINER` para checagem segura de papéis
-
-### ⚙️ Configurações do Perfil
-- Edição de nome, instituição, laboratório, programa, orientador
-- Nível acadêmico (graduação, mestrado, doutorado, pós-doc, pesquisador)
-
----
-
-## 🛠️ Stack Tecnológica
-
-| Camada       | Tecnologia                        |
-|--------------|-----------------------------------|
-| Frontend     | React 18, TypeScript, Vite        |
-| UI           | Tailwind CSS, shadcn/ui, Recharts |
-| Backend      | Lovable Cloud (Supabase)          |
-| Banco        | PostgreSQL com RLS                |
-| Auth         | Supabase Auth                     |
-| Parsing      | SheetJS (xlsx)                    |
-| Estado       | React Query, Context API          |
-| Roteamento   | React Router v6                   |
-
----
-
-## 📁 Estrutura do Projeto
-
-```
-src/
-├── components/         # Componentes reutilizáveis
-│   ├── ui/             # shadcn/ui components
-│   ├── AppHeader.tsx
-│   ├── AppSidebar.tsx
-│   ├── BackupSettings.tsx
-│   ├── DashboardCharts.tsx
-│   ├── DatabaseVariables.tsx
-│   ├── DatabaseVersions.tsx
-│   ├── DescriptiveStats.tsx
-│   ├── FilePreview.tsx
-│   ├── LDHeatmap.tsx
-│   ├── ManhattanPlot.tsx
-│   ├── QQPlot.tsx
-│   └── UpdateDatabaseDialog.tsx
-├── contexts/           # AuthContext, VersionContext
-├── hooks/              # useAdminCheck, use-mobile, use-toast
-├── lib/                # Serviços e utilitários
-│   ├── activityLog.ts
-│   ├── backupExport.ts
-│   ├── backupService.ts
-│   ├── fileParser.ts
-│   ├── ldAnalysis.ts
-│   └── utils.ts
-├── pages/              # Páginas da aplicação
-│   ├── AdminPage.tsx
-│   ├── Dashboard.tsx
-│   ├── DatabasePage.tsx
-│   ├── DescriptiveStatsPage.tsx
-│   ├── DiseaseDatabases.tsx
-│   ├── LDAnalysisPage.tsx
-│   ├── LoginPage.tsx
-│   ├── PendingApprovalPage.tsx
-│   ├── ResetPasswordPage.tsx
-│   ├── SettingsPage.tsx
-│   └── VersionManager.tsx
-└── integrations/supabase/  # Client e tipos (auto-gerados)
+```bash
+git clone https://github.com/tiagochavo87/secure-database-guardian.git dblapoge
+cd dblapoge
+# Com domínio (HTTPS automático via Let's Encrypt). Domínio gratuito serve,
+# ex.: meulab.duckdns.org, desde que aponte para o IP do servidor:
+sudo ./scripts/instalar-linux.sh meulab.duckdns.org
+# Só na rede interna, sem domínio (HTTP na porta 8080):
+sudo ./scripts/instalar-linux.sh
 ```
 
----
+O script instala o Docker, gera o `.env` com segredos aleatórios (`scripts/gerar-env.sh`) e sobe tudo. Para fazer à mão:
 
-## 🗄️ Modelo de Dados
+```bash
+./scripts/gerar-env.sh                        # cria .env (revise DOMAIN, SMTP, BACKUP_*)
+docker compose -f docker-compose.local.yml -f docker-compose.remote.yml up -d --build   # com domínio
+docker compose -f docker-compose.local.yml -f docker-compose.lan.yml up -d --build      # só rede interna
+```
 
-| Tabela              | Descrição                                      |
-|---------------------|-------------------------------------------------|
-| `profiles`          | Perfis de usuários (nome, instituição, lab...)  |
-| `user_roles`        | Papéis (`admin`, `moderator`, `user`)           |
-| `disease_databases` | Bancos de dados por doença                      |
-| `database_versions` | Versões dos bancos com dados (JSONB)            |
-| `database_variables`| Variáveis cadastradas por banco                 |
-| `version_backups`   | Backups automáticos de versões                  |
-| `backup_settings`   | Configurações de destinos de backup             |
-| `activity_log`      | Registro de atividades do sistema               |
+Serviços: `postgres` (só em 127.0.0.1), `db-setup` (cria o usuário do banco sem superusuário), `api`, `backup` (diário) e `web` (Caddy).
 
----
+### B. Um PC com Windows 10/11 como servidor do laboratório
 
-## 🚀 Como Usar
+PowerShell **como Administrador**, com o projeto numa pasta definitiva (ex.: `C:\DBLAPOGE`):
 
-1. Acesse a aplicação e cadastre-se
-2. Aguarde aprovação do administrador
-3. Após aprovado, faça login e comece a gerenciar bancos de dados
-4. Na seção **Bancos de Dados**, crie um novo banco e faça upload dos dados
-5. Use **Atualizar Banco** para adicionar novas versões (backup automático incluso)
-6. Explore análises em **Estatísticas Descritivas** e **Análise LD**
+```powershell
+.\windows\install-server.ps1                                   # HTTP na rede interna
+.\windows\install-server.ps1 -Https -EncryptBackups -BackupDir "D:\Backups"   # recomendado
+```
 
----
+Detalhes, HTTPS e confiança do certificado nos outros PCs: [windows/README.md](windows/README.md).
 
-## 👤 Administrador Padrão
+### C. Desenvolvimento
 
-O e-mail `chaves.smo@gmail.com` é automaticamente aprovado e recebe o papel de **admin** ao se cadastrar.
+```bash
+npm ci && (cd backend/local-api && npm ci)
+cp .env.example .env                          # VITE_API_URL=http://localhost:3001
+cp backend/local-api/.env.example backend/local-api/.env   # preencha JWT_SECRET, DATABASE_URL, admin
+npm run dev:api                               # API em :3001
+npm run dev                                   # interface em :8080
+```
 
----
+## Testes
 
-## 👨‍💻 Autor
+```bash
+npm test                                      # testes da interface (Vitest)
+TEST_DATABASE_URL=postgres://.../dblapoge_test npm run test:api   # API contra Postgres real (APAGA esse banco)
+npm run lint && npx tsc -p tsconfig.app.json --noEmit
+```
 
-**Tiago Fernando Chaves**  
-Contato: chaves.smo@gmail.com
+Depois de instalar num servidor, rode de qualquer PC com Node:
 
----
+```bash
+node scripts/testar-servidor.mjs https://meulab.duckdns.org admin@lab.org 'senha-do-admin'
+E2E_BASE_URL=https://meulab.duckdns.org E2E_EMAIL=... E2E_PASSWORD=... npm run test:e2e   # navegador real (npx playwright install chromium)
+```
 
-## 📄 Licença
+O `testar-servidor.mjs` confere saúde da API, cabeçalhos de segurança, HTTPS, exigência de login, reset de senha, estabilidade com requisições malformadas, auditoria e sigilo dos segredos de backup. Não altera dados.
 
-Projeto desenvolvido para uso interno do LAPOGE — Laboratório de Genética e Biodiversidade.  
-Todos os direitos reservados © Tiago Fernando Chaves.
+A CI (`.github/workflows/ci.yml`) roda testes, lint, typecheck, build e `npm audit` a cada push.
+
+## Segurança e LGPD (resumo)
+
+- **Mascaramento no servidor**: colunas identificáveis (nome, CPF, nascimento, telefone, endereço, prontuário, etc.) saem mascaradas da API para quem não é administrador. A detecção é automática pelo nome da coluna e o administrador pode corrigir variável por variável (tela de variáveis do banco → coluna LGPD).
+- **Auditoria confiável**: login, falhas de login, mudanças de senha, alterações de dados, papéis, aprovações, cópias/restaurações e **visualizações de dados sensíveis** são registrados pelo servidor (origem "Servidor" no log). O log é somente-acréscimo, nem o admin apaga.
+- **Sessões**: expiram (padrão 12 h, renovadas com o uso); trocar a senha encerra as sessões em outros PCs; "Sair de todos os computadores" em Configurações; o admin pode encerrar as sessões de um usuário.
+- **Senhas**: bcrypt (custo 12), mínimo 10 caracteres, tokens de recuperação guardados só como hash, uso único, 1 hora.
+- **Banco**: a API usa o usuário `dblapoge_app`, sem superusuário. Postgres nunca exposto na rede.
+- **Backup**: `pg_dump` diário em arquivo, com retenção (30 dias), checksum e criptografia AES-256 opcional compatível com `openssl`. **Copie a pasta de backups para fora do servidor** (HD externo ou pasta sincronizada com a nuvem).
+- **Segredos dos destinos de backup** (tokens, senhas) ficam cifrados no banco e nunca voltam ao navegador.
+
+## Variáveis de ambiente da API
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `DATABASE_URL` | — | conexão PostgreSQL (usuário `dblapoge_app`) |
+| `JWT_SECRET` | — | ≥ 32 caracteres aleatórios (a API não sobe sem) |
+| `JWT_EXPIRES_IN` | `12h` | validade da sessão |
+| `SETTINGS_ENCRYPTION_KEY` | derivada do JWT_SECRET | chave dos segredos de backup |
+| `CORS_ORIGIN` | `http://localhost:8080` | origens externas permitidas (a própria origem sempre é) |
+| `PUBLIC_APP_URL` | — | base do link de recuperação de senha |
+| `TRUST_PROXY` | vazio | `1` só quando há proxy (Caddy) na frente |
+| `HTTPS` | `false` | `true` quando o acesso é por HTTPS (liga HSTS) |
+| `HTTPS_PFX_PATH` / `HTTPS_PFX_PASSPHRASE` | — | certificado próprio (modo Windows `-Https`) |
+| `UNMASKED_ROLES` | `admin` | papéis que veem dados sem máscara |
+| `PASSWORD_MIN_LENGTH` | `10` | tamanho mínimo de senha |
+| `BODY_LIMIT` | `50mb` | tamanho máximo de envio (versões grandes) |
+| `SMTP_*`, `MAIL_FROM` | — | e-mail de recuperação de senha (sem SMTP o link vai só para o log) |
+| `INITIAL_ADMIN_EMAIL` / `_PASSWORD` / `_NAME` | — | admin criado na primeira subida |
+
+## Estrutura
+
+```
+src/                     interface React
+backend/local-api/       API (src/app.js rotas, permissions.js, masking.js, audit.js, schema.js migrações)
+backup/                  imagem do serviço de backup diário (Docker)
+docker/, scripts/        setup do banco, geração de .env, instalação Linux, restauração, teste do servidor
+windows/                 instalador, backup, restauração e certificado (Windows 10/11)
+e2e/                     teste de navegador (Playwright)
+docs/                    guia de migração (o .docx é o manual da v1, desatualizado)
+```
+
+## Formatos de arquivo aceitos
+
+`.xlsx`, `.csv` e `.txt`/`.tsv` (separados por tab, `;` ou `,`). Arquivos `.xls` antigos (Excel 97-2003) precisam ser salvos como `.xlsx` ou `.csv` antes.
+
+## Licença e contato
+
+Uso interno do LAPOGE/UFSC. Responsável: Tiago Fernando Chaves.

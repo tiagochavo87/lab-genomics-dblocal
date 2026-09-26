@@ -1,3 +1,6 @@
+# DBLAPOGE v2 - banco, API e backup diário.
+#   docker compose -f docker-compose.local.yml up -d --build
+# Para acesso remoto com HTTPS, some o docker-compose.remote.yml (ver README).
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,41 +8,86 @@ services:
     environment:
       POSTGRES_DB: dblapoge
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env (veja .env.docker.example)}
-    # Só expõe a porta do Postgres ao host local (127.0.0.1). Em uma
-    # instalação com acesso remoto, o banco NÃO deve ficar acessível pela
-    # rede externa — apenas a API (porta 3001) precisa ser exposta.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env (veja .env.docker.example)}
+      APP_DB_USER: dblapoge_app
+      TZ: ${TZ:-America/Sao_Paulo}
+    # Só no host local; nunca exponha o Postgres para a rede.
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - dblapoge_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dblapoge"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Cria o usuário "dblapoge_app" (sem superusuário) usado pela API e pelo backup.
+  db-setup:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: dblapoge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      APP_DB_USER: dblapoge_app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Defina APP_DB_PASSWORD no .env}
+    volumes:
+      - ./docker/db-setup.sh:/db-setup.sh:ro
+      - ./scripts/db-setup.sql:/db-setup.sql:ro
+    entrypoint: ["sh", "/db-setup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   api:
     build: ./backend/local-api
     restart: unless-stopped
     environment:
       PORT: 3001
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}@postgres:5432/dblapoge
-      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env, gerado com openssl rand -hex 32}
+      DATABASE_URL: postgres://dblapoge_app:${APP_DB_PASSWORD}@postgres:5432/dblapoge
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env, gerado com openssl rand -hex 32}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:8080/reset-password}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@local.test}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Defina INITIAL_ADMIN_PASSWORD no arquivo .env}
-      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrador Local}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Defina INITIAL_ADMIN_PASSWORD no .env}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrador}
+      UNMASKED_ROLES: ${UNMASKED_ROLES:-admin}
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-10}
+      BODY_LIMIT: ${BODY_LIMIT:-50mb}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       MAIL_FROM: ${MAIL_FROM:-DBLAPOGE <no-reply@localhost>}
-    # Só acessível pelo host local e por outros containers desta rede
-    # (o Caddy do docker-compose.remote.yml chega na API via rede interna
-    # do Docker mesmo com a porta publicada só em 127.0.0.1). Isso evita
-    # que a API fique diretamente exposta pela rede externa sem TLS.
+      TZ: ${TZ:-America/Sao_Paulo}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
-      - postgres
+      db-setup:
+        condition: service_completed_successfully
+
+  # Backup diário (pg_dump) em ./backups, com retenção e criptografia opcional.
+  # Copie essa pasta para outro disco/nuvem (ver README, seção Backup).
+  backup:
+    build: ./backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGDATABASE: dblapoge
+      PGUSER: dblapoge_app
+      PGPASSWORD: ${APP_DB_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-12:30}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:-}
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
 
 volumes:
   dblapoge_pgdata:

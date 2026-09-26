@@ -1,26 +1,19 @@
 # Proxy reverso com HTTPS automático.
-#
-# - Se DOMAIN for um domínio público real (ex.: dblapoge.suainstituicao.org)
-#   com DNS apontando para este servidor e as portas 80/443 liberadas, o
-#   Caddy obtém e renova um certificado Let's Encrypt sozinho.
-# - Se DOMAIN ficar "localhost" (padrão) ou for um IP/hostname privado, o
-#   Caddy usa sua CA interna (certificado confiável só localmente — o
-#   navegador vai avisar que não reconhece o emissor, o que é esperado em
-#   testes locais ou atrás de VPN sem domínio público).
+# - DOMAIN = domínio real (inclusive gratuito, ex.: meulab.duckdns.org) com
+#   DNS apontando para este servidor e portas 80/443 liberadas: o Caddy
+#   obtém e renova o certificado Let's Encrypt sozinho.
+# - DOMAIN = localhost ou IP privado: certificado interno do Caddy (o
+#   navegador avisa que o emissor não é reconhecido; normal em teste).
 {$DOMAIN:localhost} {
-	encode gzip
+	encode zstd gzip
 
-	# Backend Node/Express: autenticação e API de dados. Os cabeçalhos de
-	# segurança dessas respostas já vêm do helmet() no server.js — não
-	# duplicar aqui (evita valores repetidos/conflitantes, ex.:
-	# X-Frame-Options: DENY,SAMEORIGIN).
+	# API: os cabeçalhos de segurança vêm do helmet() no Express.
 	@backend path /health /auth/* /api/*
 	handle @backend {
 		reverse_proxy api:3001
 	}
 
-	# Frontend (build estático do Vite): aqui sim precisamos setar os
-	# cabeçalhos, já que é o Caddy (não o Express) quem serve esses arquivos.
+	# Frontend estático.
 	handle {
 		root * /srv
 		try_files {path} /index.html
@@ -30,6 +23,12 @@
 			X-Content-Type-Options "nosniff"
 			X-Frame-Options "DENY"
 			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'"
 		}
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html path / /index.html
+		header @html Cache-Control "no-cache"
 	}
 }
