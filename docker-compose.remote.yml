@@ -11,7 +11,13 @@
 # Só esse serviço precisa expor porta para a rede externa (80/443). A API e
 # o Postgres continuam alcançáveis apenas via rede interna do Docker.
 services:
+  api:
+    environment:
+      TRUST_PROXY: "1"
+      HTTPS: "true"
+
   web:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.web

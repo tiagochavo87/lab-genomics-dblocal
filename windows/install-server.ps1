@@ -44,8 +44,20 @@ function New-RandomSecret([int]$Bytes = 32) {
 }
 
 function New-RandomPassword([int]$Length = 20) {
-  $chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#%"
-  -join (1..$Length | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+  # Get-Random nao e criptograficamente seguro; usa o RNG do sistema com
+  # rejection sampling (sem vies). So alfanumericos: a senha do Postgres vai
+  # dentro da DATABASE_URL, e caracteres como # ou % quebravam o parse da URL
+  # e impediam o servico de subir.
+  $chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+  $limit = 256 - (256 % $chars.Length)
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $one = New-Object byte[] 1
+  $out = New-Object System.Text.StringBuilder
+  while ($out.Length -lt $Length) {
+    $rng.GetBytes($one)
+    if ($one[0] -lt $limit) { [void]$out.Append($chars[$one[0] % $chars.Length]) }
+  }
+  $out.ToString()
 }
 
 # --- 0. Pre-checagens -------------------------------------------------
@@ -221,7 +233,10 @@ nssm start $ServiceName
 
 Write-Step "Liberando a porta $Port no Firewall do Windows"
 if (-not (Get-NetFirewallRule -DisplayName $ServiceName -ErrorAction SilentlyContinue)) {
-  New-NetFirewallRule -DisplayName $ServiceName -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow | Out-Null
+  # Restrito a redes Privada/Dominio e a sub-rede local: nao abre a porta em
+  # redes marcadas como Publicas nem para enderecos fora da LAN.
+  New-NetFirewallRule -DisplayName $ServiceName -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow `
+    -Profile Domain,Private -RemoteAddress LocalSubnet | Out-Null
 }
 
 # --- 7. Checagem final -----------------------------------------------------

@@ -27,7 +27,13 @@ export function canWriteTable(user, table, filters = [], values = {}) {
     // pelo próprio cliente).
     return hasOwnFilter(filters, user.id, ["user_id", "id"]);
   }
-  if (table === "activity_log") return values.user_id === user.id || user.app_role === "admin";
+  if (table === "activity_log") {
+    if (user.app_role === "admin") return true;
+    // Log de auditoria é append-only para não-admins: só INSERT (sem filtros)
+    // e sempre em nome do próprio usuário. PATCH/DELETE (que usam filtros)
+    // ficam bloqueados para não permitir adulterar registros existentes.
+    return (!filters || filters.length === 0) && values.user_id === user.id;
+  }
   return false;
 }
 
@@ -40,6 +46,10 @@ export function restrictProfileFields(user, payload) {
   return clean;
 }
 
+// Só considera filtros que de fato viram cláusula do WHERE (op === "eq").
+// Antes, um filtro com op diferente passava nesta checagem mas era descartado
+// pelo buildWhere, liberando leitura/escrita/remoção de linhas de terceiros.
 function hasOwnFilter(filters, userId, fields) {
-  return (filters || []).some((f) => fields.includes(f?.field) && String(f?.value) === String(userId));
+  if (!Array.isArray(filters)) return false;
+  return filters.some((f) => f?.op === "eq" && fields.includes(f?.field) && String(f?.value) === String(userId));
 }

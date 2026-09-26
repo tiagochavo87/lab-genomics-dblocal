@@ -14,6 +14,22 @@ import { canReadTable, canWriteTable, restrictProfileFields } from "./permission
 import { sendPasswordResetEmail } from "./mailer.js";
 
 const app = express();
+
+// Express 4 não captura exceções de handlers async: qualquer throw fora de um
+// try/catch vira unhandled rejection e derruba o processo. Este wrapper
+// encaminha o erro para o handler de erro no final do arquivo.
+for (const method of ["get", "post", "patch", "delete"]) {
+  const original = app[method].bind(app);
+  app[method] = (path, ...handlers) => {
+    if (handlers.length === 0) return original(path);
+    return original(path, ...handlers.map((h) => (req, res, next) => {
+      try {
+        const out = h(req, res, next);
+        if (out && typeof out.catch === "function") out.catch(next);
+      } catch (err) { next(err); }
+    }));
+  };
+}
 const PORT = Number(process.env.PORT || 3001);
 // Aceita uma lista separada por vírgula para permitir, por exemplo, o acesso
 // simultâneo via localhost (uso local) e via um domínio/túnel (acesso remoto).
@@ -22,14 +38,36 @@ const CORS_ORIGINS = (process.env.CORS_ORIGIN || "http://localhost:8080")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-app.set("trust proxy", 1);
-app.use(helmet());
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin || CORS_ORIGINS.includes(origin)) return callback(null, true);
-    return callback(new Error("Origem não permitida pela política de CORS"));
-  },
-  credentials: false,
+// Só confie em X-Forwarded-For quando houver de fato um proxy reverso na
+// frente (Caddy, no modo Docker remoto). No modo Windows "processo único" o
+// cliente fala direto com o Node, e confiar no cabeçalho permitiria burlar o
+// rate limit de login apenas trocando o X-Forwarded-For a cada tentativa.
+const TRUST_PROXY = process.env.TRUST_PROXY;
+app.set("trust proxy", TRUST_PROXY ? (/^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY) : false);
+
+// upgrade-insecure-requests (padrão do helmet) faz o navegador pedir os
+// assets em https://; servindo por HTTP simples (modo Windows na rede local)
+// a página fica em branco nos outros PCs. Só ativa quando HTTPS=true.
+const cspDirectives = helmet.contentSecurityPolicy.getDefaultDirectives();
+if (String(process.env.HTTPS || "false") !== "true") cspDirectives["upgrade-insecure-requests"] = null;
+cspDirectives["style-src"] = ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"];
+cspDirectives["font-src"] = ["'self'", "data:", "https://fonts.gstatic.com"];
+app.use(helmet({
+  contentSecurityPolicy: { directives: cspDirectives },
+  strictTransportSecurity: String(process.env.HTTPS || "false") === "true",
+}));
+// Requisições da própria origem (frontend servido por este mesmo processo,
+// modo Windows) são sempre aceitas, independentemente do IP/hostname usado
+// para acessar — antes, se o IP do servidor mudasse (DHCP) ou o instalador
+// escolhesse a interface de rede errada, TODOS os assets (scripts de módulo
+// mandam Origin) voltavam 500 e a página ficava em branco. Origens externas
+// continuam restritas ao allowlist; origem negada = sem cabeçalhos CORS
+// (o navegador bloqueia), em vez de erro 500.
+app.use(cors((req, callback) => {
+  const origin = req.header("Origin");
+  const self = `${req.protocol}://${req.get("host")}`;
+  const allowed = !origin || origin === self || CORS_ORIGINS.includes(origin);
+  callback(null, { origin: allowed, credentials: false });
 }));
 app.use(express.json({ limit: "25mb" }));
 app.use(morgan("dev"));
@@ -53,8 +91,12 @@ app.get('/health', (_req, res) => {
 });
 
 app.use(async (req, _res, next) => {
-  req.authUser = await getAuthUser(req);
-  next();
+  try {
+    req.authUser = await getAuthUser(req);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 function requireAuth(req, res, next) {
@@ -303,8 +345,14 @@ app.delete('/api/table/:table', requireAuth, async (req, res) => {
 
 function parseFilters(raw) {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  try { return JSON.parse(String(raw)); } catch { return []; }
+  let parsed = raw;
+  if (!Array.isArray(raw)) {
+    try { parsed = JSON.parse(String(raw)); } catch { return []; }
+  }
+  // Sempre devolve um array de objetos: um objeto/string aqui derrubava o
+  // processo inteiro (TypeError fora do try/catch -> unhandled rejection).
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((f) => f && typeof f === "object" && !Array.isArray(f));
 }
 
 function qIdent(value) {
@@ -367,6 +415,16 @@ if (fs.existsSync(path.join(FRONTEND_DIST_PATH, "index.html"))) {
   });
   console.log(`Servindo frontend estático de ${FRONTEND_DIST_PATH}`);
 }
+
+app.use((err, _req, res, _next) => {
+  console.error(err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Erro interno' });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
 
 await initDb();
 await ensureInitialAdmin();
