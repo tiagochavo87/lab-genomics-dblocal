@@ -65,13 +65,17 @@ export default function LDAnalysisPage() {
     // Summary
     sheets.push({ name: "Resumo", rows: [results.summary] });
 
+    // Números saem como números de verdade (o Excel mostra com vírgula e
+    // aceita em fórmulas), arredondados; valores indefinidos viram "NA".
+    const num = (v: number, digits = 6) => (Number.isFinite(v) ? Number(v.toFixed(digits)) : "NA");
+
     // QC
     const qcData = results.qc.map(q => ({
       Locus: q.locus,
       "N Válidos": q.nNonMissing,
       "N Missing": q.nMissing,
       "N Parcial": q.nPartialMissing,
-      MAF: q.maf.toFixed(4),
+      MAF: num(q.maf, 4),
       "Contagem Alelos": JSON.stringify(q.alleleCounts),
       "Freq. Alelos": JSON.stringify(q.alleleFreqs),
     }));
@@ -80,7 +84,7 @@ export default function LDAnalysisPage() {
     // Haplotypes
     const hapData = results.haplotypes.map(h => ({
       Haplótipo: h.haplotype,
-      Frequência: h.frequency.toFixed(6),
+      Frequência: num(h.frequency),
       "Obs. Direta": h.directlyObservable ? "Sim" : "Não",
     }));
     sheets.push({ name: "Haplótipos", rows: hapData });
@@ -89,19 +93,19 @@ export default function LDAnalysisPage() {
     const ldData = results.ldDetails.map(d => ({
       Locus1: d.locus1, Locus2: d.locus2,
       Alelo1: d.allele1, Alelo2: d.allele2,
-      pA: d.pA.toFixed(4), pB: d.pB.toFixed(4), pAB: d.pAB.toFixed(4),
-      D: d.D.toFixed(6), "D'": d.dPrime.toFixed(4), "r²": d.r2.toFixed(4),
+      pA: num(d.pA, 4), pB: num(d.pB, 4), pAB: num(d.pAB, 4),
+      D: num(d.D), "D'": num(d.dPrime, 4), "r²": num(d.r2, 4),
     }));
     sheets.push({ name: "LD Detalhado", rows: ldData });
 
     // r2 matrix
     const { loci, values: r2Vals } = results.r2Matrix;
-    const r2Sheet = [["", ...loci], ...loci.map((l, i) => [l, ...r2Vals[i].map(v => Number.isNaN(v) ? "NA" : v.toFixed(4))])];
+    const r2Sheet = [["", ...loci], ...loci.map((l, i) => [l, ...r2Vals[i].map(v => num(v, 4))])];
     sheets.push({ name: "Matriz r²", aoa: r2Sheet });
 
     // D' matrix
     const dpVals = results.dPrimeMatrix.values;
-    const dpSheet = [["", ...loci], ...loci.map((l, i) => [l, ...dpVals[i].map(v => Number.isNaN(v) ? "NA" : v.toFixed(4))])];
+    const dpSheet = [["", ...loci], ...loci.map((l, i) => [l, ...dpVals[i].map(v => num(v, 4))])];
     sheets.push({ name: "Matriz D prime", aoa: dpSheet });
 
     void downloadXlsx(`LD_Analysis_${(fileName || "results").replace(/\.[^.]+$/, "")}.xlsx`, sheets)
