@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,17 +10,21 @@ import { Download, Trash2, Shield, User, FileJson, AlertTriangle } from "lucide-
 import { logActivity } from "@/lib/activityLog";
 
 export default function MyDataPage() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Sempre mostra o perfil atualizado ao abrir a página.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void refreshProfile(); }, []);
 
   const handleExportData = async () => {
     if (!user || !profile) return;
 
     // Gather all user data
     const [activityRes, rolesRes] = await Promise.all([
-      supabase.from("activity_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
-      supabase.from("user_roles").select("*").eq("user_id", user.id),
+      api.from("activity_log").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
+      api.from("user_roles").select("*").eq("user_id", user.id),
     ]);
 
     const exportPayload = {

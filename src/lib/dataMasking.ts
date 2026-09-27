@@ -1,61 +1,46 @@
 /**
- * LGPD Data Masking Utility
- * Masks identifying columns for non-admin users.
- * Admins see full data; regular users see masked values.
+ * Identificação de colunas identificáveis (LGPD) para AVISOS na interface.
+ *
+ * O mascaramento em si é feito no SERVIDOR (backend/local-api/src/masking.js):
+ * quem não tem permissão já recebe os valores mascarados e nunca vê o dado
+ * original, nem pelas ferramentas do navegador. Mantenha as listas abaixo
+ * iguais às do servidor.
  */
 
-// Columns that are considered identifying (case-insensitive partial match)
-const IDENTIFYING_PATTERNS = [
-  "nome", "name", "paciente", "patient",
-  "cpf", "rg", "identidade", "identity",
-  "endereco", "endereço", "address",
-  "telefone", "phone", "celular",
-  "email", "e-mail", "mail",
-  "nascimento", "birth", "data_nasc",
-  "mae", "mãe", "pai", "mother", "father",
-  "sus", "prontuario", "prontuário", "registro",
-  "cns", // Cartão Nacional de Saúde
+const EXACT_TOKENS = new Set([
+  "nome", "name", "nomes", "paciente", "patient", "cpf", "rg", "identidade", "identity",
+  "endereco", "address", "rua", "bairro", "cep", "logradouro",
+  "telefone", "fone", "tel", "phone", "celular", "whatsapp",
+  "email", "mail",
+  "nascimento", "nasc", "dn", "dob", "birth", "birthdate", "aniversario",
+  "mae", "pai", "mother", "father", "responsavel",
+  "sus", "cns", "prontuario", "registro", "matricula",
+  "iniciais", "initials", "sobrenome", "surname",
+]);
+
+const SUBSTRINGS = [
+  "nomecompleto", "nomedopaciente", "nomepaciente", "datanasc", "dtnasc", "datadenascimento",
+  "nascimento", "prontuario", "cartaosus", "telefone", "celular", "endereco", "email",
+  "paciente", "patient", "identidade", "sobrenome", "nomedamae", "nomemae", "nomedopai",
 ];
 
 export function isIdentifyingColumn(columnName: string): boolean {
-  const lower = columnName.toLowerCase().replace(/[_\-\s]/g, "");
-  return IDENTIFYING_PATTERNS.some((pattern) =>
-    lower.includes(pattern.replace(/[_\-\s]/g, ""))
-  );
+  const norm = columnName
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase();
+  const tokens = norm.split(/[^a-z0-9]+/).filter(Boolean);
+  if (tokens.some((t) => EXACT_TOKENS.has(t))) return true;
+  const joined = tokens.join("");
+  return SUBSTRINGS.some((s) => joined.includes(s));
 }
 
-export function maskValue(value: unknown): string {
-  if (value == null) return "—";
-  const str = String(value);
-  if (str.length <= 2) return "***";
-  // Show first and last char, mask the rest
-  return str[0] + "*".repeat(Math.min(str.length - 2, 8)) + str[str.length - 1];
-}
+interface VariableFlag { name: string; identifying?: boolean | null }
 
-export function getIdentifyingColumns(columns: string[]): string[] {
-  return columns.filter(isIdentifyingColumn);
-}
-
-export function maskRow(
-  row: Record<string, unknown>,
-  identifyingCols: Set<string>,
-  isAdmin: boolean
-): Record<string, unknown> {
-  if (isAdmin) return row;
-  const masked: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(row)) {
-    masked[key] = identifyingCols.has(key) ? maskValue(value) : value;
-  }
-  return masked;
-}
-
-export function maskDataset(
-  data: Record<string, unknown>[],
-  isAdmin: boolean
-): Record<string, unknown>[] {
-  if (isAdmin || data.length === 0) return data;
-  const allCols = Object.keys(data[0]);
-  const idCols = new Set(getIdentifyingColumns(allCols));
-  if (idCols.size === 0) return data;
-  return data.map((row) => maskRow(row, idCols, false));
+/** Colunas identificáveis: marcação explícita da variável prevalece sobre o nome. */
+export function getIdentifyingColumns(columns: string[], variables: VariableFlag[] = []): string[] {
+  const explicit = new Map<string, boolean>();
+  for (const v of variables) if (typeof v.identifying === "boolean") explicit.set(v.name, v.identifying);
+  return columns.filter((c) => (explicit.has(c) ? explicit.get(c)! : isIdentifyingColumn(c)));
 }

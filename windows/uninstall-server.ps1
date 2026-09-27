@@ -1,10 +1,8 @@
 #Requires -RunAsAdministrator
 <#
-  Remove o servico do Windows e a regra de firewall criados por
-  install-server.ps1. NAO apaga o banco de dados nem a pasta do repositorio -
-  isso e proposital, para nao perder dados por engano.
+  Remove o servico, a tarefa de backup e a regra de firewall do DBLAPOGE.
+  NAO apaga o banco de dados, os backups nem a pasta do projeto.
 #>
-
 $ErrorActionPreference = "Stop"
 $ServiceName = "DBLAPOGE"
 
@@ -13,15 +11,16 @@ if (Get-Command nssm -ErrorAction SilentlyContinue) {
   nssm stop $ServiceName 2>$null | Out-Null
   nssm remove $ServiceName confirm 2>$null | Out-Null
 } else {
-  Write-Host "nssm nao encontrado - remova o servico manualmente pelo services.msc se ele ainda existir."
+  Write-Host "nssm nao encontrado - remova o servico pelo services.msc se ainda existir."
 }
-
+if (Get-ScheduledTask -TaskName "DBLAPOGE Backup" -ErrorAction SilentlyContinue) {
+  Unregister-ScheduledTask -TaskName "DBLAPOGE Backup" -Confirm:$false
+  Write-Host "Tarefa de backup removida."
+}
 if (Get-NetFirewallRule -DisplayName $ServiceName -ErrorAction SilentlyContinue) {
-  Write-Host "Removendo a regra de firewall '$ServiceName'..."
   Remove-NetFirewallRule -DisplayName $ServiceName
+  Write-Host "Regra de firewall removida."
 }
-
 Write-Host ""
-Write-Host "Servico e regra de firewall removidos."
-Write-Host "O banco de dados PostgreSQL ('dblapoge') e a pasta do repositorio NAO foram apagados."
-Write-Host "Para reinstalar depois, rode windows\install-server.ps1 de novo."
+Write-Host "Removido. Banco ('dblapoge'), backups e pasta do projeto foram mantidos."
+Write-Host "Para reinstalar: .\windows\install-server.ps1"

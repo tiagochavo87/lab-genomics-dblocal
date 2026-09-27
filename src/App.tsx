@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { VersionProvider } from "@/contexts/VersionContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppHeader } from "@/components/AppHeader";
@@ -18,6 +17,11 @@ import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PendingApprovalPage from "@/pages/PendingApprovalPage";
 import LDAnalysisPage from "@/pages/LDAnalysisPage";
+import AdvancedHub from "@/pages/advanced/AdvancedHub";
+import HardyWeinbergPage from "@/pages/advanced/HardyWeinbergPage";
+import AssociationPage from "@/pages/advanced/AssociationPage";
+import ComparisonPage from "@/pages/advanced/ComparisonPage";
+import LogisticPage from "@/pages/advanced/LogisticPage";
 import DescriptiveStatsPage from "@/pages/DescriptiveStatsPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import MyDataPage from "@/pages/MyDataPage";
@@ -45,7 +49,7 @@ function ProtectedLayout() {
   }
 
   return (
-    <VersionProvider>
+    <>
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
           <AppSidebar />
@@ -58,7 +62,13 @@ function ProtectedLayout() {
                 <Route path="/diseases" element={<DiseaseDatabases />} />
                 <Route path="/descriptive-stats" element={<DescriptiveStatsPage />} />
                 <Route path="/versions" element={<VersionManager />} />
-                <Route path="/ld-analysis" element={<LDAnalysisPage />} />
+                <Route path="/avancada" element={<AdvancedHub />} />
+                <Route path="/avancada/ld" element={<LDAnalysisPage />} />
+                <Route path="/avancada/hardy-weinberg" element={<HardyWeinbergPage />} />
+                <Route path="/avancada/associacao" element={<AssociationPage />} />
+                <Route path="/avancada/comparacao" element={<ComparisonPage />} />
+                <Route path="/avancada/regressao" element={<LogisticPage />} />
+                <Route path="/ld-analysis" element={<Navigate to="/avancada/ld" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/my-data" element={<MyDataPage />} />
                 <Route path="/privacy" element={<PrivacyPolicyPage />} />
@@ -69,7 +79,7 @@ function ProtectedLayout() {
           </div>
         </div>
       </SidebarProvider>
-    </VersionProvider>
+    </>
   );
 }
 

@@ -1,26 +1,16 @@
 import nodemailer from "nodemailer";
+import { config } from "./config.js";
 
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_SECURE = String(process.env.SMTP_SECURE || "false") === "true";
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-const MAIL_FROM = process.env.MAIL_FROM || "DBLAPOGE <no-reply@localhost>";
+const { host, port, secure, user, pass, from } = config.smtp;
 
-const transporter = SMTP_HOST
-  ? nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      secure: SMTP_SECURE,
-      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-    })
+const transporter = host
+  ? nodemailer.createTransport({ host, port, secure, auth: user ? { user, pass } : undefined })
   : null;
 
-if (!transporter) {
+if (!transporter && !config.isTest) {
   console.warn(
-    "[AVISO] SMTP_HOST não configurado: emails (ex.: reset de senha) não serão enviados de verdade, " +
-    "apenas registrados no log do servidor. Configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/MAIL_FROM " +
-    "antes de liberar esta instalação para acesso remoto por usuários que não têm acesso ao log."
+    "[AVISO] SMTP_HOST não configurado: e-mails de recuperação de senha não serão enviados, " +
+    "apenas registrados no log do servidor. Configure SMTP_* antes de liberar o acesso remoto."
   );
 }
 
@@ -28,23 +18,28 @@ export function isEmailConfigured() {
   return Boolean(transporter);
 }
 
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 export async function sendPasswordResetEmail(to, link) {
   if (!transporter) {
-    console.log(`[reset-password] SMTP não configurado. Link de recuperação para ${to}: ${link}`);
+    if (config.isTest) globalThis.__lastResetLink = link; // só nos testes automatizados
+    if (!config.isTest) console.log(`[reset-password] SMTP não configurado. Link de recuperação para ${to}: ${link}`);
     return { delivered: false };
   }
-
+  const safe = escapeHtml(link);
   await transporter.sendMail({
-    from: MAIL_FROM,
+    from,
     to,
-    subject: "Recuperação de senha — DBLAPOGE",
-    text: `Você solicitou a redefinição de senha da sua conta no DBLAPOGE.\n\n` +
+    subject: "Recuperação de senha - DBLAPOGE",
+    text: "Você solicitou a redefinição de senha da sua conta no DBLAPOGE.\n\n" +
       `Use o link abaixo para definir uma nova senha (válido por 1 hora):\n${link}\n\n` +
-      `Se você não fez essa solicitação, ignore este email.`,
-    html: `<p>Você solicitou a redefinição de senha da sua conta no <strong>DBLAPOGE</strong>.</p>` +
-      `<p>Use o link abaixo para definir uma nova senha (válido por 1 hora):</p>` +
-      `<p><a href="${link}">${link}</a></p>` +
-      `<p>Se você não fez essa solicitação, ignore este email.</p>`,
+      "Se você não fez essa solicitação, ignore este e-mail.",
+    html: "<p>Você solicitou a redefinição de senha da sua conta no <strong>DBLAPOGE</strong>.</p>" +
+      "<p>Use o link abaixo para definir uma nova senha (válido por 1 hora):</p>" +
+      `<p><a href="${safe}">${safe}</a></p>` +
+      "<p>Se você não fez essa solicitação, ignore este e-mail.</p>",
   });
   return { delivered: true };
 }

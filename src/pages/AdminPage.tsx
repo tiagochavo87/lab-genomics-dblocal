@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,8 @@ interface ActivityEntry {
   entity_id: string | null;
   details: Record<string, unknown>;
   created_at: string;
+  source?: "server" | "client";
+  ip?: string | null;
 }
 
 export default function AdminPage() {
@@ -54,7 +56,7 @@ export default function AdminPage() {
 
   const checkAdminAndLoad = async () => {
     if (!user) return;
-    const { data: roleData } = await supabase
+    const { data: roleData } = await api
       .from("user_roles").select("*").eq("user_id", user.id).eq("role", "admin");
     if (!roleData || roleData.length === 0) { setIsAdmin(false); setLoading(false); return; }
     setIsAdmin(true);
@@ -64,9 +66,9 @@ export default function AdminPage() {
 
   const loadData = async () => {
     const [profilesRes, rolesRes, logRes] = await Promise.all([
-      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-      supabase.from("user_roles").select("*"),
-      supabase.from("activity_log").select("*").order("created_at", { ascending: false }).limit(50),
+      api.from("profiles").select("*").order("created_at", { ascending: false }),
+      api.from("user_roles").select("*"),
+      api.from("activity_log").select("*").order("created_at", { ascending: false }).limit(200),
     ]);
     if (profilesRes.data) setProfiles(profilesRes.data as UserProfile[]);
     if (rolesRes.data) setUserRoles(rolesRes.data as UserRole[]);
@@ -74,7 +76,7 @@ export default function AdminPage() {
   };
 
   const toggleApproval = async (profile: UserProfile) => {
-    const { error } = await supabase
+    const { error } = await api
       .from("profiles").update({ approved: !profile.approved }).eq("id", profile.id);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -90,8 +92,8 @@ export default function AdminPage() {
   };
 
   const setRole = async (userId: string, role: "admin" | "moderator" | "user") => {
-    await supabase.from("user_roles").delete().eq("user_id", userId);
-    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+    // Atualização atômica (antes: apagar + inserir, que podia deixar o usuário sem papel).
+    const { error } = await api.from("user_roles").update({ role }).eq("user_id", userId);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -257,7 +259,7 @@ export default function AdminPage() {
                 <History className="h-5 w-5 text-primary" />
                 Registro de Atividades
               </CardTitle>
-              <CardDescription>Últimas 50 ações registradas no sistema</CardDescription>
+              <CardDescription>Últimas 200 ações. "Servidor" = registrado pela API (confiável); "Navegador" = enviado pela interface.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -267,6 +269,7 @@ export default function AdminPage() {
                     <TableHead>Usuário</TableHead>
                     <TableHead>Ação</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Origem</TableHead>
                     <TableHead>Detalhes</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -281,14 +284,19 @@ export default function AdminPage() {
                         <Badge variant="secondary" className="text-xs">{formatAction(entry.action)}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{entry.entity_type}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
-                        {Object.entries(entry.details || {}).map(([k, v]) => `${k}: ${v}`).join(", ") || "—"}
+                      <TableCell>
+                        <Badge variant={entry.source === "server" ? "default" : "outline"} className="text-[10px]">
+                          {entry.source === "server" ? "Servidor" : "Navegador"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[260px] truncate" title={JSON.stringify(entry.details || {})}>
+                        {Object.entries(entry.details || {}).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(", ") || "—"}
                       </TableCell>
                     </TableRow>
                   ))}
                   {activityLog.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhuma atividade registrada</TableCell>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhuma atividade registrada</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -335,6 +343,18 @@ export default function AdminPage() {
                 >
                   {selectedProfile.approved ? <><XCircle className="h-4 w-4" /> Revogar Acesso</> : <><CheckCircle className="h-4 w-4" /> Aprovar Acesso</>}
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    const { error } = await api.admin.revokeSessions(selectedProfile.user_id);
+                    toast(error
+                      ? { title: "Erro", description: error.message, variant: "destructive" }
+                      : { title: "Sessões encerradas", description: "O usuário precisará entrar de novo em todos os computadores." });
+                  }}
+                  className="gap-1.5 flex-1"
+                >
+                  Encerrar sessões
+                </Button>
               </div>
             </div>
           )}
@@ -365,6 +385,33 @@ function formatAction(action: string): string {
     variable_deleted: "Variável excluída",
     profile_updated: "Perfil atualizado",
     data_exported: "Dados exportados",
+    login: "Login",
+    login_failed: "Falha de login",
+    user_registered: "Cadastro",
+    password_changed: "Senha alterada",
+    password_reset_requested: "Pedido de nova senha",
+    password_reset_completed: "Senha redefinida",
+    logout_all_sessions: "Saiu de todos os PCs",
+    sessions_revoked_by_admin: "Sessões encerradas (admin)",
+    sensitive_data_view: "Visualizou dados sensíveis",
+    sensitive_data_export: "Exportou dados sensíveis",
+    backup_created: "Cópia criada",
+    backup_restored: "Cópia restaurada",
+    backup_sent: "Enviado a destinos",
+    disease_databases_insert: "Banco criado",
+    disease_databases_update: "Banco alterado",
+    disease_databases_delete: "Banco excluído",
+    database_versions_insert: "Versão criada",
+    database_versions_update: "Versão alterada",
+    database_versions_delete: "Versão excluída",
+    database_variables_insert: "Variáveis criadas",
+    database_variables_update: "Variável alterada",
+    database_variables_delete: "Variável excluída",
+    profiles_update: "Perfil alterado",
+    user_roles_update: "Permissão alterada",
+    backup_settings_insert: "Destino de backup criado",
+    backup_settings_update: "Destino de backup alterado",
+    backup_settings_delete: "Destino de backup removido",
   };
   return map[action] || action;
 }

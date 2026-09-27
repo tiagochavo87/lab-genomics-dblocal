@@ -1,13 +1,12 @@
-# Build de produção do frontend, servido depois pelo Caddy (ver Caddyfile e
-# docker-compose.remote.yml). VITE_API_URL fica vazio de propósito: o Caddy
-# serve o frontend e faz proxy da API no MESMO domínio/origem, então as
-# chamadas do cliente usam caminhos relativos (sem CORS, sem porta 3001 exposta).
-FROM node:20-bookworm-slim AS build
+# Build de produção do frontend, servido pelo Caddy (ver Caddyfile e
+# docker-compose.remote.yml). VITE_API_URL vazio: o Caddy serve o frontend e
+# faz proxy da API no mesmo domínio (sem CORS, porta 3001 não exposta).
+FROM node:24-bookworm-slim AS build
 WORKDIR /app
 ARG VITE_API_URL=""
 ENV VITE_API_URL=${VITE_API_URL}
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
-import { maskDataset, getIdentifyingColumns } from "@/lib/dataMasking";
+import { getIdentifyingColumns } from "@/lib/dataMasking";
 import { logSensitiveAccess } from "@/lib/sensitiveAccessLog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Upload, Download, FileSpreadsheet, FileText, Calendar, Layers, Columns3, ChevronLeft, ChevronRight, GitCompare, Search, X, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 import { logActivity } from "@/lib/activityLog";
 import { parseUploadedFile } from "@/lib/fileParser";
 import FilePreview from "@/components/FilePreview";
@@ -72,8 +72,8 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
 
   const fetchData = async () => {
     const [versionsRes, varsRes] = await Promise.all([
-      supabase.from("database_versions").select("*").eq("database_id", databaseId).order("created_at", { ascending: false }),
-      supabase.from("database_variables").select("*").eq("database_id", databaseId).order("sort_order"),
+      api.from("database_versions").select("*").eq("database_id", databaseId).order("created_at", { ascending: false }),
+      api.from("database_variables").select("*").eq("database_id", databaseId).order("sort_order"),
     ]);
     if (versionsRes.data) {
       const parsed = versionsRes.data.map(v => ({
@@ -105,7 +105,7 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
 
     const finalName = versionName.trim() || `v${versionNumber} - ${selectedFile?.name.replace(/\.[^.]+$/, '') ?? "upload"}`;
 
-    const { error } = await supabase.from("database_versions").insert({
+    const { error } = await api.from("database_versions").insert({
       database_id: databaseId,
       name: finalName,
       version_number: versionNumber.trim() || "1.0",
@@ -130,7 +130,7 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
           description: "",
           sort_order: i,
         }));
-        const { error: varError } = await supabase.from("database_variables").insert(variableInserts);
+        const { error: varError } = await api.from("database_variables").insert(variableInserts);
         if (varError) console.error("Auto-create variables error:", varError);
       }
 
@@ -152,7 +152,8 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
   
   const activeData = useMemo(() => {
     const raw = activeVersion?.data || [];
-    const masked = maskDataset(raw, isAdmin);
+    // Já vem mascarado do servidor para quem não tem permissão.
+    const masked = raw;
     if (!searchData.trim()) return masked;
     const q = searchData.toLowerCase();
     return masked.filter(row =>
@@ -162,14 +163,15 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
 
   const allColumns = variables.map(v => v.name);
   const orderedVisible = allColumns.filter(c => visibleColumns.has(c));
-  const identifyingCols = useMemo(() => getIdentifyingColumns(allColumns), [allColumns]);
+  const identifyingCols = useMemo(() => getIdentifyingColumns(allColumns, variables), [allColumns, variables]);
   const totalPages = Math.ceil(activeData.length / pageSize);
   const pageData = activeData.slice(page * pageSize, (page + 1) * pageSize);
 
   const toggleColumn = (col: string) => {
     setVisibleColumns(prev => {
       const next = new Set(prev);
-      next.has(col) ? next.delete(col) : next.add(col);
+      if (next.has(col)) next.delete(col);
+      else next.add(col);
       return next;
     });
   };
@@ -201,11 +203,11 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
     });
 
     if (format === "xlsx") {
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(exportRows);
-      XLSX.utils.book_append_sheet(wb, ws, "Dados");
-      XLSX.writeFile(wb, `${activeVersion?.name || "dados"}.xlsx`);
-      toast.success("Arquivo XLS exportado!");
+      const sheets: SheetSpec[] = [];
+      sheets.push({ name: "Dados", rows: exportRows });
+      void downloadXlsx(`${activeVersion?.name || "dados"}.xlsx`, sheets)
+        .then(() => toast.success("Arquivo XLS exportado!"))
+        .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
     } else {
       const header = orderedVisible.join("\t");
       const rows = exportRows.map(r => orderedVisible.map(c => String(r[c] ?? "")).join("\t"));

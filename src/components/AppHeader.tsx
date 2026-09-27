@@ -1,10 +1,14 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useVersion } from "@/contexts/VersionContext";
-import { GitBranch, Dna } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/hooks/useAdminCheck";
+import { Dna } from "lucide-react";
+
+const ROLE_LABEL = { admin: "Administrador", moderator: "Moderador", user: "Usuário" } as const;
 
 export function AppHeader() {
-  const { versions, selectedVersionId, setSelectedVersionId } = useVersion();
+  const { profile, user } = useAuth();
+  const { role } = useRole();
 
   return (
     <header className="h-14 flex items-center justify-between border-b bg-card/80 backdrop-blur-sm px-4 sticky top-0 z-10">
@@ -16,20 +20,11 @@ export function AppHeader() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <GitBranch className="h-4 w-4 text-muted-foreground" />
-        <Select value={selectedVersionId} onValueChange={setSelectedVersionId}>
-          <SelectTrigger className="w-[220px] h-9 text-sm border-border/60">
-            <SelectValue placeholder="Selecione a versão" />
-          </SelectTrigger>
-          <SelectContent>
-            {versions.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
-                {v.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="hidden sm:inline text-muted-foreground truncate max-w-[220px]">
+          {profile?.full_name || user?.email}
+        </span>
+        <Badge variant={role === "admin" ? "default" : "secondary"}>{ROLE_LABEL[role]}</Badge>
       </div>
     </header>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +32,7 @@ export default function UpdateDatabaseDialog({ databaseId, diseaseName, onVersio
   }, [open, databaseId]);
 
   const fetchNextVersion = async () => {
-    const { data } = await supabase
+    const { data } = await api
       .from("database_versions")
       .select("version_number")
       .eq("database_id", databaseId)
@@ -56,7 +56,7 @@ export default function UpdateDatabaseDialog({ databaseId, diseaseName, onVersio
 
     try {
       // Backup existing versions before creating new one
-      const { data: existingVersions } = await supabase
+      const { data: existingVersions } = await api
         .from("database_versions")
         .select("id")
         .eq("database_id", databaseId);
@@ -67,7 +67,7 @@ export default function UpdateDatabaseDialog({ databaseId, diseaseName, onVersio
 
       const versionName = `v${nextVersion} - ${diseaseName}`;
 
-      const { data: newVersion, error } = await supabase.from("database_versions").insert({
+      const { data: newVersion, error } = await api.from("database_versions").insert({
         database_id: databaseId,
         name: versionName,
         version_number: nextVersion,
@@ -82,7 +82,7 @@ export default function UpdateDatabaseDialog({ databaseId, diseaseName, onVersio
       }
 
       // Auto-create variables if none exist
-      const { data: existingVars } = await supabase
+      const { data: existingVars } = await api
         .from("database_variables")
         .select("id")
         .eq("database_id", databaseId)
@@ -97,15 +97,12 @@ export default function UpdateDatabaseDialog({ databaseId, diseaseName, onVersio
           description: "",
           sort_order: i,
         }));
-        await supabase.from("database_variables").insert(variableInserts);
+        await api.from("database_variables").insert(variableInserts);
       }
 
       // Create backup of the new version
       if (newVersion) {
-        await createSingleVersionBackup(
-          { ...newVersion, data: Array.isArray(newVersion.data) ? newVersion.data : [] },
-          "new_version_upload"
-        );
+        await createSingleVersionBackup(newVersion.id, "new_version_upload");
       }
 
       toast.success(`Versão "${versionName}" criada com ${previewData.length} registros!`);

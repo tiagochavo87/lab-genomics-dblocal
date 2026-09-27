@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api, PASSWORD_MIN_LENGTH } from "@/integrations/api/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     // Check for recovery event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = api.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
       }
@@ -39,8 +39,8 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(""); setSuccess("");
 
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await api.auth.updateUser({ password });
     if (error) {
       setError(error.message);
     } else {
@@ -102,7 +102,7 @@ export default function ResetPasswordPage() {
               <Label className="text-sm font-medium">Nova senha</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type="password" placeholder="Mínimo 6 caracteres" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 h-11" required />
+                <Input type="password" placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`} value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 h-11" required />
               </div>
             </div>
             <div className="space-y-2">

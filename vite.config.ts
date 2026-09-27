@@ -9,6 +9,18 @@ export default defineConfig({
     hmr: { overlay: false },
   },
   plugins: [react()],
+  build: {
+    // Planilhas (ExcelJS) e gráficos ficam em arquivos separados, carregados sob demanda.
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom", "react-router-dom"],
+          charts: ["recharts"],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

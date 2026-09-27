@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { parseUploadedFile } from "@/lib/fileParser";
+import { UnsupportedSpreadsheetError } from "@/lib/spreadsheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, FileSpreadsheet } from "lucide-react";
@@ -36,9 +37,9 @@ export default function FilePreview({ file, maxRows = 20, onParsed }: FilePrevie
           onParsed?.(rows, cols);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setError("Erro ao processar o arquivo.");
+        setError(err instanceof UnsupportedSpreadsheetError ? err.message : "Erro ao processar o arquivo.");
         setData([]);
         setColumns([]);
         onParsed?.([], []);

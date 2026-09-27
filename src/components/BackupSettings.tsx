@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,19 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { HardDrive, Cloud, Download, Globe, Server, Plus, Trash2, Edit2, CheckCircle, XCircle } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 
 interface BackupSetting {
   id: string;
   setting_type: string;
   label: string;
-  config: Record<string, string>;
+  config: Record<string, string | boolean>;
   enabled: boolean;
   created_at: string;
 }
 
 const SETTING_TYPES = [
-  { value: "cloud_storage", label: "Lovable Cloud Storage", icon: Cloud, description: "Armazenamento integrado do projeto" },
+  { value: "cloud_storage", label: "Cópia interna (mesmo banco)", icon: Cloud, description: "Cópias de versão no próprio banco, para desfazer alterações" },
   { value: "google_drive", label: "Google Drive", icon: HardDrive, description: "Salvar backups no Google Drive" },
   { value: "manual_download", label: "Download Manual", icon: Download, description: "Botão para baixar backup como arquivo" },
   { value: "external_server", label: "Servidor Externo (URL)", icon: Globe, description: "Enviar backups via webhook/API" },
@@ -30,19 +29,20 @@ const SETTING_TYPES = [
 ];
 
 export default function BackupSettings() {
-  const { user } = useAuth();
   const [settings, setSettings] = useState<BackupSetting[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formType, setFormType] = useState("cloud_storage");
   const [formLabel, setFormLabel] = useState("");
   const [formConfig, setFormConfig] = useState<Record<string, string>>({});
+  // Segredos já gravados no servidor (nunca voltam ao navegador).
+  const [secretsSet, setSecretsSet] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { loadSettings(); }, []);
 
   const loadSettings = async () => {
-    const { data } = await supabase
+    const { data } = await api
       .from("backup_settings")
       .select("*")
       .order("created_at", { ascending: true });
@@ -55,6 +55,7 @@ export default function BackupSettings() {
     setFormType("cloud_storage");
     setFormLabel("");
     setFormConfig({});
+    setSecretsSet({});
     setDialogOpen(true);
   };
 
@@ -62,7 +63,14 @@ export default function BackupSettings() {
     setEditingId(s.id);
     setFormType(s.setting_type);
     setFormLabel(s.label);
-    setFormConfig(s.config || {});
+    const cfg: Record<string, string> = {};
+    const set: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(s.config || {})) {
+      if (k.endsWith("__set")) set[k.replace(/__set$/, "")] = Boolean(v);
+      else cfg[k] = String(v ?? "");
+    }
+    setFormConfig(cfg);
+    setSecretsSet(set);
     setDialogOpen(true);
   };
 
@@ -75,19 +83,19 @@ export default function BackupSettings() {
     const payload = {
       setting_type: formType,
       label: formLabel.trim(),
+      // Campo secreto vazio = manter o valor já gravado no servidor.
       config: formConfig,
-      created_by: user?.id,
     };
 
     if (editingId) {
-      const { error } = await supabase
+      const { error } = await api
         .from("backup_settings")
         .update(payload as any)
         .eq("id", editingId);
       if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
       toast({ title: "Destino atualizado" });
     } else {
-      const { error } = await supabase
+      const { error } = await api
         .from("backup_settings")
         .insert(payload as any);
       if (error) { toast({ title: "Erro", description: error.message, variant: "destructive" }); return; }
@@ -98,7 +106,7 @@ export default function BackupSettings() {
   };
 
   const toggleEnabled = async (s: BackupSetting) => {
-    await supabase
+    await api
       .from("backup_settings")
       .update({ enabled: !s.enabled } as any)
       .eq("id", s.id);
@@ -106,7 +114,7 @@ export default function BackupSettings() {
   };
 
   const deleteSetting = async (id: string) => {
-    await supabase.from("backup_settings").delete().eq("id", id);
+    await api.from("backup_settings").delete().eq("id", id);
     toast({ title: "Destino removido" });
     await loadSettings();
   };
@@ -118,6 +126,7 @@ export default function BackupSettings() {
       case "google_drive":
         return (
           <div className="space-y-3">
+            <p className="text-xs text-amber-600">Envio automático ao Google Drive ainda não está implementado; use o backup diário em pasta sincronizada (ver documentação).</p>
             <div>
               <Label>Folder ID do Google Drive</Label>
               <Input placeholder="Ex: 1AbC..." value={formConfig.folder_id || ""} onChange={e => setFormConfig({ ...formConfig, folder_id: e.target.value })} />
@@ -134,7 +143,7 @@ export default function BackupSettings() {
             </div>
             <div>
               <Label>Token de Autenticação (opcional)</Label>
-              <Input type="password" placeholder="Bearer token..." value={formConfig.auth_token || ""} onChange={e => setFormConfig({ ...formConfig, auth_token: e.target.value })} />
+              <Input type="password" autoComplete="off" placeholder={secretsSet.auth_token ? "•••••• (já configurado; deixe vazio para manter)" : "Bearer token..."} value={formConfig.auth_token || ""} onChange={e => setFormConfig({ ...formConfig, auth_token: e.target.value })} />
             </div>
           </div>
         );
@@ -151,7 +160,7 @@ export default function BackupSettings() {
             </div>
             <div>
               <Label>Senha / Token de Acesso</Label>
-              <Input type="password" placeholder="••••••••" value={formConfig.password || ""} onChange={e => setFormConfig({ ...formConfig, password: e.target.value })} />
+              <Input type="password" autoComplete="off" placeholder={secretsSet.password ? "•••••• (já configurada; deixe vazio para manter)" : "••••••••"} value={formConfig.password || ""} onChange={e => setFormConfig({ ...formConfig, password: e.target.value })} />
             </div>
             <div>
               <Label>Diretório Remoto (opcional)</Label>
@@ -161,7 +170,7 @@ export default function BackupSettings() {
         );
       case "cloud_storage":
         return (
-          <p className="text-sm text-muted-foreground">Os backups serão salvos automaticamente no armazenamento integrado do projeto. Nenhuma configuração adicional necessária.</p>
+          <p className="text-sm text-muted-foreground">As cópias de versão ficam no próprio banco (tela "Versões e Cópias"). Servem para desfazer alterações, mas <strong>não protegem contra perda do servidor</strong>: para isso existe o backup diário automático (pg_dump) configurado na instalação.</p>
         );
       case "manual_download":
         return (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Database, Layers, Activity, Users, Columns3, ChevronLeft, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
+import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRole } from "@/hooks/useAdminCheck";
+import { getIdentifyingColumns } from "@/lib/dataMasking";
+import { logActivity } from "@/lib/activityLog";
+import { ShieldAlert } from "lucide-react";
 import DashboardCharts from "@/components/DashboardCharts";
 
 const PAGE_SIZES = [10, 25, 50, 100];
@@ -42,7 +46,7 @@ interface VariableRecord {
 export default function Dashboard() {
   const { profile } = useAuth();
 
-  // Data from supabase
+  // Data from api
   const [databases, setDatabases] = useState<DbRecord[]>([]);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
   const [variables, setVariables] = useState<VariableRecord[]>([]);
@@ -63,9 +67,9 @@ export default function Dashboard() {
 
   const loadAll = async () => {
     const [dbRes, verRes, varRes] = await Promise.all([
-      supabase.from("disease_databases").select("id, name, disease").order("name"),
-      supabase.from("database_versions").select("id, name, database_id, row_count, data, created_at").order("created_at", { ascending: false }),
-      supabase.from("database_variables").select("id, name, category, variable_type, database_id, sort_order").order("sort_order"),
+      api.from("disease_databases").select("id, name, disease").order("name"),
+      api.from("database_versions").select("id, name, database_id, row_count, data, created_at").order("created_at", { ascending: false }),
+      api.from("database_variables").select("id, name, category, variable_type, database_id, sort_order").order("sort_order"),
     ]);
     const dbs = dbRes.data || [];
     const vers = verRes.data || [];
@@ -90,6 +94,11 @@ export default function Dashboard() {
   // Derived: filtered versions & variables for selected database
   const dbVersions = useMemo(() => versions.filter(v => v.database_id === selectedDbId), [versions, selectedDbId]);
   const dbVariables = useMemo(() => variables.filter(v => v.database_id === selectedDbId), [variables, selectedDbId]);
+  const { isAdmin } = useRole();
+  const maskedCols = useMemo(
+    () => getIdentifyingColumns(dbVariables.map((v) => v.name), dbVariables as Array<{ name: string; identifying?: boolean | null }>),
+    [dbVariables]
+  );
 
   // Grouped variables by category
   const groupedVars = useMemo(() => {
@@ -139,7 +148,8 @@ export default function Dashboard() {
   const toggleVar = (name: string) => {
     setVisibleVars(prev => {
       const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
       return next;
     });
   };
@@ -164,6 +174,7 @@ export default function Dashboard() {
 
   // Export
   const exportData = (format: "xlsx" | "txt") => {
+    void logActivity("sensitive_data_export", "version", selectedVersionId, { format, records: versionData.length, masked: !isAdmin });
     if (!versionData.length || !orderedVisible.length) {
       toast.error("Nenhum dado ou variável selecionada para exportar");
       return;
@@ -182,7 +193,7 @@ export default function Dashboard() {
     });
 
     if (format === "xlsx") {
-      const wb = XLSX.utils.book_new();
+      const sheets: SheetSpec[] = [];
       const infoData = [
         ["Banco de Dados", selectedDb?.name || ""],
         ["Doença", selectedDb?.disease || ""],
@@ -192,10 +203,11 @@ export default function Dashboard() {
         ["Total de Registros", String(versionData.length)],
         ["Variáveis Exportadas", String(orderedVisible.length)],
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoData), "Informações");
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(exportRows), "Dados");
-      XLSX.writeFile(wb, `${selectedDb?.name || "dados"}_${versionLabel}.xlsx`);
-      toast.success("Arquivo XLS exportado!");
+      sheets.push({ name: "Informações", aoa: infoData });
+      sheets.push({ name: "Dados", rows: exportRows });
+      void downloadXlsx(`${selectedDb?.name || "dados"}_${versionLabel}.xlsx`, sheets)
+        .then(() => toast.success("Arquivo XLS exportado!"))
+        .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
     } else {
       const meta = [
         `# Banco de Dados: ${selectedDb?.name || ""}`,
@@ -262,7 +274,15 @@ export default function Dashboard() {
       {/* Database & Version Selectors */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-display">Explorar Dados</CardTitle>
+          <CardTitle className="text-base font-display flex items-center gap-2 flex-wrap">
+            Explorar Dados
+            {!isAdmin && maskedCols.length > 0 && (
+              <Badge variant="outline" className="text-xs gap-1 border-amber-500/50 text-amber-600 font-normal">
+                <ShieldAlert className="h-3 w-3" />
+                {maskedCols.length} coluna(s) mascarada(s) — LGPD
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-4">
