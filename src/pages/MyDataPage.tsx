@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/integrations/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +10,13 @@ import { Download, Trash2, Shield, User, FileJson, AlertTriangle } from "lucide-
 import { logActivity } from "@/lib/activityLog";
 
 export default function MyDataPage() {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, refreshProfile } = useAuth();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Sempre mostra o perfil atualizado ao abrir a página.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void refreshProfile(); }, []);
 
   const handleExportData = async () => {
     if (!user || !profile) return;

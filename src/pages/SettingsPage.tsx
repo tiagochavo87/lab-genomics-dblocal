@@ -20,7 +20,7 @@ const ROLE_OPTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("");
   const [laboratory, setLaboratory] = useState("");
@@ -88,6 +88,9 @@ export default function SettingsPage() {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Perfil atualizado com sucesso" });
+      // Atualiza o perfil em memória: sem isso "Meus Dados", o cabeçalho e a
+      // própria tela continuavam mostrando os dados antigos até sair e entrar.
+      await refreshProfile();
       await logActivity("profile_updated", "profile", user.id, { full_name: fullName.trim() });
     }
     setSaving(false);
