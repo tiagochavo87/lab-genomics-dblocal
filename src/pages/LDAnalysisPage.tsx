@@ -102,10 +102,11 @@ export default function LDAnalysisPage() {
     // D' matrix
     const dpVals = results.dPrimeMatrix.values;
     const dpSheet = [["", ...loci], ...loci.map((l, i) => [l, ...dpVals[i].map(v => Number.isNaN(v) ? "NA" : v.toFixed(4))])];
-    sheets.push({ name: "Matriz D'", aoa: dpSheet });
+    sheets.push({ name: "Matriz D prime", aoa: dpSheet });
 
-    void downloadXlsx(`LD_Analysis_${fileName || "results"}.xlsx`, sheets).catch(() => toast.error("Falha ao gerar o arquivo XLSX"));
-    toast.success("Resultados exportados!");
+    void downloadXlsx(`LD_Analysis_${(fileName || "results").replace(/\.[^.]+$/, "")}.xlsx`, sheets)
+      .then(() => toast.success("Resultados exportados!"))
+      .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
   }, [results, fileName]);
 
   return (

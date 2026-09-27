@@ -95,6 +95,23 @@ function normalizeCell(value: unknown): string | number | boolean | Date | null 
   return JSON.stringify(value);
 }
 
+/**
+ * Nome de aba aceito pelo Excel: até 31 caracteres, sem : \\ / ? * [ ],
+ * sem apóstrofo no início/fim (ex.: "Matriz D'" quebrava a exportação do LD)
+ * e sem repetir nomes.
+ */
+export function safeSheetName(name: string, used: Set<string> = new Set()): string {
+  let base = String(name || "").replace(/[:\\/?*[\]]/g, "-").replace(/^'+|'+$/g, "").trim().slice(0, 31) || "Planilha";
+  base = base.replace(/'+$/g, "").trim() || "Planilha";
+  let candidate = base;
+  for (let i = 2; used.has(candidate.toLowerCase()); i++) {
+    const suffix = ` (${i})`;
+    candidate = base.slice(0, 31 - suffix.length) + suffix;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
+
 /** Gera e baixa um .xlsx com uma ou mais planilhas. */
 export async function downloadXlsx(filename: string, sheets: SheetSpec[]): Promise<void> {
   const ExcelJS = await loadExcelJS();
@@ -102,10 +119,9 @@ export async function downloadXlsx(filename: string, sheets: SheetSpec[]): Promi
   workbook.creator = "DBLAPOGE";
   workbook.created = new Date();
 
+  const used = new Set<string>();
   for (const spec of sheets) {
-    // Nomes de planilha: máx. 31 caracteres e sem : \ / ? * [ ]
-    const safeName = spec.name.replace(/[:\\/?*[\]]/g, "-").slice(0, 31) || "Planilha";
-    const sheet = workbook.addWorksheet(safeName);
+    const sheet = workbook.addWorksheet(safeSheetName(spec.name, used));
     const aoa = spec.aoa ?? rowsToAoa(spec.rows ?? []);
     for (const line of aoa) sheet.addRow(line.map(normalizeCell));
   }
@@ -117,7 +133,14 @@ export async function downloadXlsx(filename: string, sheets: SheetSpec[]): Promi
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename.endsWith(".xlsx") ? filename : `${filename}.xlsx`;
+  // Sem acentos e caracteres proibidos no Windows: alguns navegadores/sistemas
+  // descartam o nome e salvam como "download" sem extensão.
+  const clean = filename
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]/g, "")
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .trim() || "dados";
+  a.download = clean.endsWith(".xlsx") ? clean : `${clean}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -205,8 +205,9 @@ export default function DatabaseVersions({ databaseId }: { databaseId: string })
     if (format === "xlsx") {
       const sheets: SheetSpec[] = [];
       sheets.push({ name: "Dados", rows: exportRows });
-      void downloadXlsx(`${activeVersion?.name || "dados"}.xlsx`, sheets).catch(() => toast.error("Falha ao gerar o arquivo XLSX"));
-      toast.success("Arquivo XLS exportado!");
+      void downloadXlsx(`${activeVersion?.name || "dados"}.xlsx`, sheets)
+        .then(() => toast.success("Arquivo XLS exportado!"))
+        .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
     } else {
       const header = orderedVisible.join("\t");
       const rows = exportRows.map(r => orderedVisible.map(c => String(r[c] ?? "")).join("\t"));

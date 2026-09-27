@@ -184,8 +184,9 @@ export default function DatabasePage() {
       ];
       sheets.push({ name: "Informações", aoa: infoData });
       sheets.push({ name: "Dados", rows: exportRows });
-      void downloadXlsx(`${dbName}_${versionLabel}.xlsx`, sheets).catch(() => toast.error("Falha ao gerar o arquivo XLSX"));
-      toast.success("Arquivo XLS exportado!");
+      void downloadXlsx(`${dbName}_${versionLabel}.xlsx`, sheets)
+        .then(() => toast.success("Arquivo XLS exportado!"))
+        .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
     } else {
       const meta = [
         `# Banco de Dados: ${dbName}`,
