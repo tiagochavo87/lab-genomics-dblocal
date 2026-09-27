@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,14 @@ import { toast } from "sonner";
 import { readTextFile } from "@/lib/textEncoding";
 import { downloadXlsx, type SheetSpec } from "@/lib/spreadsheet";
 import { runLDAnalysis, DEFAULT_LD_PARAMS, type LDResults, type LDParams } from "@/lib/ldAnalysis";
+import { toMlocus, type MlocusConversion } from "@/lib/stats/genotype";
+import DataSourcePicker, { type LoadedData } from "@/components/analysis/DataSourcePicker";
+import { ColumnChecklist, ColumnSelect, useColumnKinds } from "@/components/analysis/controls";
 import LDHeatmap from "@/components/LDHeatmap";
 import ManhattanPlot from "@/components/ManhattanPlot";
 import QQPlot from "@/components/QQPlot";
+
+const NO_ID = "__sem_id__";
 
 export default function LDAnalysisPage() {
   const [fileContent, setFileContent] = useState<string | null>(null);
@@ -22,12 +27,33 @@ export default function LDAnalysisPage() {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState("");
   const [params, setParams] = useState<LDParams>(DEFAULT_LD_PARAMS);
+  // Fonte alternativa: tabela com genótipos (banco do sistema ou planilha)
+  const [table, setTable] = useState<LoadedData | null>(null);
+  const [idCol, setIdCol] = useState(NO_ID);
+  const [snpCols, setSnpCols] = useState<string[]>([]);
+  const [legend, setLegend] = useState<MlocusConversion["legend"] | null>(null);
+  const tableRows = useMemo(() => table?.rows ?? [], [table]);
+  const tableCols = useMemo(() => table?.columns ?? [], [table]);
+  const kinds = useColumnKinds(tableRows, tableCols);
+
+  const prepareFromTable = useCallback(() => {
+    if (!table || snpCols.length < 2) return;
+    const conv = toMlocus(tableRows, idCol === NO_ID ? null : idCol, snpCols);
+    const usable = conv.legend.filter((l) => l.biallelic).length;
+    if (usable < 2) { toast.error("São necessários pelo menos 2 SNPs bialélicos."); return; }
+    setFileContent(conv.text);
+    setFileName(table.label);
+    setLegend(conv.legend);
+    setResults(null);
+    toast.success(`${usable} SNPs de ${conv.nSamples} amostras prontos para a análise`);
+  }, [table, tableRows, idCol, snpCols]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
     setResults(null);
+    setLegend(null);
 
     readTextFile(file)
       .then((text) => {
@@ -108,10 +134,17 @@ export default function LDAnalysisPage() {
     const dpSheet = [["", ...loci], ...loci.map((l, i) => [l, ...dpVals[i].map(v => num(v, 4))])];
     sheets.push({ name: "Matriz D prime", aoa: dpSheet });
 
+    if (legend) {
+      sheets.push({
+        name: "Codificação dos alelos",
+        rows: legend.map((l) => ({ SNP: l.snp, "Alelo 1": l.allele1, "Alelo 2": l.allele2, Observação: l.biallelic ? "" : "não bialélico: excluído" })),
+      });
+    }
+
     void downloadXlsx(`LD_Analysis_${(fileName || "results").replace(/\.[^.]+$/, "")}.xlsx`, sheets)
       .then(() => toast.success("Resultados exportados!"))
       .catch((err) => { console.error("[xlsx]", err); toast.error("Falha ao gerar o arquivo XLSX: " + (err?.message || err)); });
-  }, [results, fileName]);
+  }, [results, fileName, legend]);
 
   return (
     <div className="p-6 space-y-6">
@@ -129,9 +162,40 @@ export default function LDAnalysisPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Arquivo de Entrada (formato MLOCUS)</CardTitle>
+            <CardTitle className="text-base">Dados de Entrada</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Tabs defaultValue="mlocus">
+              <TabsList>
+                <TabsTrigger value="mlocus">Arquivo MLOCUS</TabsTrigger>
+                <TabsTrigger value="tabela">Banco do sistema ou planilha com genótipos</TabsTrigger>
+              </TabsList>
+              <TabsContent value="tabela" className="space-y-4 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Use um banco já cadastrado ou uma planilha com uma coluna por SNP (genótipos como AA, AG, GG ou A/G).
+                  O sistema converte automaticamente para o formato da análise.
+                </p>
+                <DataSourcePicker onData={(d) => { setTable(d); setSnpCols([]); setIdCol(NO_ID); }} />
+                {table && (
+                  <div className="space-y-3">
+                    <ColumnSelect label="Coluna de identificação (opcional)" value={idCol} onChange={setIdCol}
+                      columns={[NO_ID, ...tableCols.filter((c) => kinds[c] !== "genotipo")]}
+                      labelOf={(c) => (c === NO_ID ? "Sem ID (numerar)" : null)} />
+                    <ColumnChecklist label="SNPs (pelo menos 2)" columns={tableCols} kinds={kinds} selected={snpCols}
+                      onChange={setSnpCols} filter={(c) => kinds[c] === "genotipo"} />
+                    <Button variant="secondary" onClick={prepareFromTable} disabled={snpCols.length < 2}>Preparar dados para o LD</Button>
+                  </div>
+                )}
+                {legend && (
+                  <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
+                    <p className="font-semibold mb-1">Codificação usada (1 = alelo mais frequente):</p>
+                    {legend.map((l) => (
+                      <p key={l.snp}>{l.snp}: 1 = {l.allele1}, 2 = {l.allele2}{!l.biallelic && " (não bialélico: excluído)"}</p>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+              <TabsContent value="mlocus" className="space-y-4 pt-2">
             <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
               <Upload className="h-8 w-8 mx-auto text-muted-foreground/50 mb-2" />
               <p className="text-sm text-muted-foreground mb-3">
@@ -161,6 +225,8 @@ CONT424\t1\t1\t1\t1\t1\t1`}
               </pre>
               <p>Missing: <code>-9</code>, vazio, <code>NA</code>, <code>NaN</code>, <code>.</code>, <code>NULL</code></p>
             </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 

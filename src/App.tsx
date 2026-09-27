@@ -17,6 +17,10 @@ import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PendingApprovalPage from "@/pages/PendingApprovalPage";
 import LDAnalysisPage from "@/pages/LDAnalysisPage";
+import HardyWeinbergPage from "@/pages/advanced/HardyWeinbergPage";
+import AssociationPage from "@/pages/advanced/AssociationPage";
+import ComparisonPage from "@/pages/advanced/ComparisonPage";
+import LogisticPage from "@/pages/advanced/LogisticPage";
 import DescriptiveStatsPage from "@/pages/DescriptiveStatsPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import MyDataPage from "@/pages/MyDataPage";
@@ -57,7 +61,12 @@ function ProtectedLayout() {
                 <Route path="/diseases" element={<DiseaseDatabases />} />
                 <Route path="/descriptive-stats" element={<DescriptiveStatsPage />} />
                 <Route path="/versions" element={<VersionManager />} />
-                <Route path="/ld-analysis" element={<LDAnalysisPage />} />
+                <Route path="/avancada/ld" element={<LDAnalysisPage />} />
+                <Route path="/avancada/hardy-weinberg" element={<HardyWeinbergPage />} />
+                <Route path="/avancada/associacao" element={<AssociationPage />} />
+                <Route path="/avancada/comparacao" element={<ComparisonPage />} />
+                <Route path="/avancada/regressao" element={<LogisticPage />} />
+                <Route path="/ld-analysis" element={<Navigate to="/avancada/ld" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/my-data" element={<MyDataPage />} />
                 <Route path="/privacy" element={<PrivacyPolicyPage />} />

@@ -214,7 +214,7 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Versão do Sistema</span>
-            <Badge variant="secondary">2.0.0</Badge>
+            <Badge variant="secondary">2.1.0</Badge>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Laboratório</span>

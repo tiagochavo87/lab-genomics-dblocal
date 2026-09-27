@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.0 (2026-09)
+
+### Estatística Avançada (novo grupo no menu)
+- Menu reorganizado: grupo **Estatística Avançada** com as partes *Genética* (Desequilíbrio de Ligação, Hardy-Weinberg, Associação Caso-Controle) e *Clínica* (Comparação entre Grupos, Regressão Logística), cada análise em sua própria página. O endereço antigo `/ld-analysis` redireciona para `/avancada/ld`.
+- Todas as análises aceitam como fonte um **banco do sistema** (qualquer versão) ou um **arquivo enviado na hora** (.xlsx, .csv, .txt).
+- **Hardy-Weinberg**: qui-quadrado (1 gl) e teste exato de Wigginton, por SNP e opcionalmente por grupo.
+- **Associação caso-controle**: modelos codominante, dominante, recessivo, sobredominante e log-aditivo (organização do SNPassoc); OR de Woolf com IC 95%, qui-quadrado, Fisher exato (2×2 e 2×3), p logístico; ajuste opcional por covariáveis (idade, sexo...).
+- **Comparação entre grupos**: variáveis numéricas (Mann-Whitney/Kruskal-Wallis e Welch/ANOVA, com média±DP e mediana [Q1–Q3]) e categóricas (qui-quadrado e Fisher); grupos podem ser uma coluna clínica ou um SNP (agrupado por modelo genético).
+- **Regressão logística** multivariada: ORs ajustadas com IC 95%, p de Wald, p global por razão de verossimilhança, AIC, R² de McFadden e avisos (separação, poucos eventos por variável).
+- **LD a partir do banco ou de planilha com genótipos** (AA, AG, A/G): conversão automática para o formato MLOCUS, com a codificação dos alelos exportada.
+- Toda análise exporta XLSX com números de verdade e uma aba **Métodos** com texto pronto para citar.
+- Biblioteca estatística própria validada contra scipy/statsmodels (testes automatizados em `src/test/stats.test.ts`).
+- Detecção automática do tipo de coluna (genótipo, numérica, categórica, identificador); "N/A", "NA", "nd" etc. tratados como faltantes.
+
 ## 2.0.0 (2026-09)
 
 Versão de endurecimento de segurança, LGPD e operação, resultado da auditoria de 26/09/2026.
