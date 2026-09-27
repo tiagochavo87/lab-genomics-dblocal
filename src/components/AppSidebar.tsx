@@ -85,13 +85,7 @@ export function AppSidebar() {
 
         <SidebarGroup>
           <SidebarGroupContent>
-            <MenuItems items={mainItems} collapsed={collapsed} />
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <MenuItems items={system} collapsed={collapsed} />
+            <MenuItems items={[...mainItems, ...system]} collapsed={collapsed} />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
