@@ -37,3 +37,11 @@ test-results/
 playwright-report/
 repo_github/
 LOGIN-DE-TESTE.txt
+
+# Arquivos de teste locais (dados fictícios gerados para conferência) e do R
+.Rhistory
+ESTATISTICA_AVANCADA_teste.xlsx
+GABARITO_ESTATISTICA_AVANCADA.txt
+GABARITO_LD_teste.txt
+LD_teste_ficticio.txt
+PLANILHA-EXEMPLO-TESTE.xlsx
