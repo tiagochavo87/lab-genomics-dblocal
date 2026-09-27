@@ -1,6 +1,6 @@
 # Estatística Avançada — guia rápido
 
-Todas as páginas seguem os mesmos 3 passos: **1. Dados** → **2. Configuração** → **3. Resultados** (com botão *Exportar XLSX*).
+No menu lateral, clique em **Estatística Avançada**: abre um painel com um cartão para cada análise. Todas as páginas seguem os mesmos 3 passos: **1. Dados** → **2. Configuração** → **3. Resultados** (com botão *Exportar XLSX*).
 
 **Fonte dos dados**
 - *Banco do sistema*: escolha o banco e a versão.

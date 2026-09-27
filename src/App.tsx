@@ -17,6 +17,7 @@ import LoginPage from "@/pages/LoginPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PendingApprovalPage from "@/pages/PendingApprovalPage";
 import LDAnalysisPage from "@/pages/LDAnalysisPage";
+import AdvancedHub from "@/pages/advanced/AdvancedHub";
 import HardyWeinbergPage from "@/pages/advanced/HardyWeinbergPage";
 import AssociationPage from "@/pages/advanced/AssociationPage";
 import ComparisonPage from "@/pages/advanced/ComparisonPage";
@@ -61,6 +62,7 @@ function ProtectedLayout() {
                 <Route path="/diseases" element={<DiseaseDatabases />} />
                 <Route path="/descriptive-stats" element={<DescriptiveStatsPage />} />
                 <Route path="/versions" element={<VersionManager />} />
+                <Route path="/avancada" element={<AdvancedHub />} />
                 <Route path="/avancada/ld" element={<LDAnalysisPage />} />
                 <Route path="/avancada/hardy-weinberg" element={<HardyWeinbergPage />} />
                 <Route path="/avancada/associacao" element={<AssociationPage />} />

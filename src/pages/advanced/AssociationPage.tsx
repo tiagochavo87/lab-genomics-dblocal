@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import BackToHub from "@/components/analysis/BackToHub";
 import DataSourcePicker, { LoadedData } from "@/components/analysis/DataSourcePicker";
 import {
   ColumnChecklist, ColumnSelect, fmt, fmtOr, fmtP, MethodsNote, PBadge, uniqueValues, useColumnKinds, ValueSelect, xnum, fileBase,
@@ -95,6 +96,7 @@ export default function AssociationPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <BackToHub />
         <h2 className="text-2xl font-bold font-display flex items-center gap-2"><Users className="h-6 w-6 text-primary" />Associação Caso-Controle</h2>
         <p className="text-sm text-muted-foreground">Compara genótipos e alelos entre casos e controles, com OR e IC 95% em cada modelo genético.</p>
       </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import BackToHub from "@/components/analysis/BackToHub";
 import DataSourcePicker, { LoadedData, Row } from "@/components/analysis/DataSourcePicker";
 import {
   ColumnChecklist, ColumnSelect, fmt, MethodsNote, PBadge, toNumber, uniqueValues, useColumnKinds, xnum, fileBase,
@@ -143,6 +144,7 @@ export default function ComparisonPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <BackToHub />
         <h2 className="text-2xl font-bold font-display flex items-center gap-2"><GitCompare className="h-6 w-6 text-primary" />Comparação entre Grupos</h2>
         <p className="text-sm text-muted-foreground">Compara variáveis clínicas (ex.: C3, idade, sexo) entre grupos ou entre genótipos de um SNP.</p>
       </div>

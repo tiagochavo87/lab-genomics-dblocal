@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import BackToHub from "@/components/analysis/BackToHub";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -149,6 +150,7 @@ export default function LDAnalysisPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <BackToHub />
         <h2 className="text-2xl font-bold font-display flex items-center gap-2">
           <Dna className="h-6 w-6 text-primary" />
           Análise de Desequilíbrio de Ligação (LD)

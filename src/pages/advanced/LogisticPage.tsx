@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import BackToHub from "@/components/analysis/BackToHub";
 import DataSourcePicker, { LoadedData, Row } from "@/components/analysis/DataSourcePicker";
 import {
   ColumnChecklist, ColumnSelect, fmt, fmtOr, MethodsNote, PBadge, uniqueValues, useColumnKinds, ValueSelect, xnum, fileBase,
@@ -172,6 +173,7 @@ export default function LogisticPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <BackToHub />
         <h2 className="text-2xl font-bold font-display flex items-center gap-2"><LineChart className="h-6 w-6 text-primary" />Regressão Logística</h2>
         <p className="text-sm text-muted-foreground">Estima a chance de um desfecho (ex.: ser caso, ter nefrite) conforme várias variáveis ao mesmo tempo, com ORs ajustadas.</p>
       </div>

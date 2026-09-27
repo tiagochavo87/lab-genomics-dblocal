@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import BackToHub from "@/components/analysis/BackToHub";
 import DataSourcePicker, { LoadedData } from "@/components/analysis/DataSourcePicker";
 import {
   ColumnChecklist, ColumnSelect, fmt, fmtP, MethodsNote, PBadge, uniqueValues, useColumnKinds, xnum, fileBase,
@@ -83,6 +84,7 @@ export default function HardyWeinbergPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
+        <BackToHub />
         <h2 className="text-2xl font-bold font-display flex items-center gap-2"><Scale className="h-6 w-6 text-primary" />Equilíbrio de Hardy-Weinberg</h2>
         <p className="text-sm text-muted-foreground">Testa se as frequências genotípicas de cada SNP estão de acordo com o esperado pelo equilíbrio de Hardy-Weinberg.</p>
       </div>

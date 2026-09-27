@@ -1,6 +1,6 @@
 import {
-  LayoutDashboard, Database, GitBranch, Settings, LogOut, User, FlaskConical, ShieldCheck, Dna, BarChart3, Shield, FileHeart,
-  Scale, Users, GitCompare, LineChart, LucideIcon,
+  LayoutDashboard, Database, GitBranch, Settings, LogOut, User, FlaskConical, ShieldCheck, BarChart3, Shield, FileHeart,
+  Sigma, LucideIcon,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -12,7 +12,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -29,26 +28,8 @@ const mainItems: Item[] = [
   { title: "Banco de Dados", url: "/database", icon: Database },
   { title: "Condições Clínicas DB", url: "/diseases", icon: FlaskConical },
   { title: "Estatísticas Descritivas", url: "/descriptive-stats", icon: BarChart3 },
+  { title: "Estatística Avançada", url: "/avancada", icon: Sigma },
   { title: "Gerenciador de Versões", url: "/versions", icon: GitBranch },
-];
-
-/** Estatística Avançada: cada análise em sua própria página. */
-const advancedSections: Array<{ label: string; items: Item[] }> = [
-  {
-    label: "Genética",
-    items: [
-      { title: "Desequilíbrio de Ligação", url: "/avancada/ld", icon: Dna },
-      { title: "Hardy-Weinberg", url: "/avancada/hardy-weinberg", icon: Scale },
-      { title: "Associação Caso-Controle", url: "/avancada/associacao", icon: Users },
-    ],
-  },
-  {
-    label: "Clínica",
-    items: [
-      { title: "Comparação entre Grupos", url: "/avancada/comparacao", icon: GitCompare },
-      { title: "Regressão Logística", url: "/avancada/regressao", icon: LineChart },
-    ],
-  },
 ];
 
 const systemItems: Item[] = [
@@ -105,18 +86,6 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <MenuItems items={mainItems} collapsed={collapsed} />
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="py-0">
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-sidebar-foreground/70">Estatística Avançada</SidebarGroupLabel>
-          <SidebarGroupContent className="space-y-1">
-            {advancedSections.map((sec) => (
-              <div key={sec.label}>
-                {!collapsed && <p className="px-2 pt-1 pb-0.5 text-[10px] text-sidebar-foreground/45">{sec.label}</p>}
-                <MenuItems items={sec.items} collapsed={collapsed} />
-              </div>
-            ))}
           </SidebarGroupContent>
         </SidebarGroup>
 

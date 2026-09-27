@@ -3,7 +3,7 @@
 ## 2.1.0 (2026-09)
 
 ### Estatística Avançada (novo grupo no menu)
-- Menu reorganizado: grupo **Estatística Avançada** com as partes *Genética* (Desequilíbrio de Ligação, Hardy-Weinberg, Associação Caso-Controle) e *Clínica* (Comparação entre Grupos, Regressão Logística), cada análise em sua própria página. O endereço antigo `/ld-analysis` redireciona para `/avancada/ld`.
+- Novo item **Estatística Avançada** no menu, que abre um painel com cartões (ícones) para cada análise, divididos em *Genética* (Desequilíbrio de Ligação, Hardy-Weinberg, Associação Caso-Controle) e *Clínica* (Comparação entre Grupos, Regressão Logística); cada análise tem sua própria página, com link de volta ao painel. O endereço antigo `/ld-analysis` redireciona para `/avancada/ld`.
 - Todas as análises aceitam como fonte um **banco do sistema** (qualquer versão) ou um **arquivo enviado na hora** (.xlsx, .csv, .txt).
 - **Hardy-Weinberg**: qui-quadrado (1 gl) e teste exato de Wigginton, por SNP e opcionalmente por grupo.
 - **Associação caso-controle**: modelos codominante, dominante, recessivo, sobredominante e log-aditivo (organização do SNPassoc); OR de Woolf com IC 95%, qui-quadrado, Fisher exato (2×2 e 2×3), p logístico; ajuste opcional por covariáveis (idade, sexo...).
